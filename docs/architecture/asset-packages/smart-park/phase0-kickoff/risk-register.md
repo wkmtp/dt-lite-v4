@@ -18,12 +18,14 @@
 | R-08 | CI/CD pipeline 不稳定导致阻塞 | 中 | 中 | contract-diff CI Job 优先保障，其余 Job 降级为 warning | Platform Lead | Day 3 | 🟡 |
 | R-09 | Smart Factory 兼容性误报/漏报 | 中 | 低 | 完善 diff 算法 + 白名单机制 + 定期回归测试 | Platform Lead | Week 4 | 🟢 |
 | R-10 | 安全扫描发现 Critical/High 漏洞 | 高 | 低 | Phase 1 同步执行安全扫描，0 Critical/High 才准入 Prod | Security Lead | Week 3 | 🟢 |
+| R-11 | 本地 Kind 测试通过但远程集群未就绪 | 中 | 高 | 使用本地测试作为预验证，远程集群部署时重新测试 | DevOps Team | Week 2 | 🟡 |
+| R-12 | GitHub Actions Workflow 配置错误 | 中 | 中 | 本地测试闭环后部署，Workflow 使用 Secrets 保护集群凭证 | Platform Lead | Week 2 | 🟡 |
 
 ## 风险趋势图
 
 ```
 🔴 高 | R-01    R-03 R-04 R-05         R-10
-🟡 中 |         R-02    R-06 R-07 R-08 R-09
+🟡 中 |         R-02    R-06 R-07 R-08 R-09 R-11 R-12
 🟢 低 |
      └─────────────────────────────────────
        D0  D1  D2  D3  D4  D5  W2  W3  W4
@@ -42,3 +44,4 @@
 | 日期 | 更新内容 | 更新人 |
 |------|----------|--------|
 | 2026-09-16 | 初始版本，10 条风险 | dt_manager |
+| 2026-09-21 | 新增 R-11 (本地测试通过但远程集群未就绪)、R-12 (GitHub Actions Workflow 配置错误) | dt_manager |
