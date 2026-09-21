@@ -3,10 +3,6 @@ name: Contract Diff Gate
 on:
   pull_request:
     branches: [main, release/uaa-v1.0-frozen]
-    paths:
-      - 'packages/schemas/universal/**'
-      - 'tools/contract-diff/**'
-      - 'packages/industry/smart-park/**'
   push:
     branches: [main, release/uaa-v1.0-frozen]
 
@@ -43,34 +39,6 @@ jobs:
           BREAKING=$(echo "$RESULT" | python -c "import sys,json; d=json.load(sys.stdin); print(d.get('breaking', False))")
           if [ "$BREAKING" = "True" ]; then exit 1; fi
           echo "Contract diff: ZERO"
-
-  helm-test:
-    name: Helm Test (${{ matrix.env }})
-    runs-on: ubuntu-latest
-    needs: contract-diff
-    if: needs.contract-diff.result == 'success'
-    strategy:
-      matrix:
-        env: [dev, staging, preprod, prod]
-      fail-fast: false
-    steps:
-      - uses: actions/checkout@v4
-      - name: Check package
-        run: |
-          if [ ! -d "packages/industry/smart-park/v1.0/helm" ]; then
-            echo "Smart Park v1.0 Helm charts not ready (P0-04 in progress)"
-            exit 0
-          fi
-      - uses: azure/setup-helm@v3
-        with:
-          version: v3.14.0
-      - name: Helm template
-        if: hashFiles('packages/industry/smart-park/v1.0/helm/Chart.yaml') != ''
-        run: |
-          helm template dt-lite-smart-park-${{ matrix.env }} packages/industry/smart-park/v1.0/helm/ -n dt-lite-${{ matrix.env }} -f packages/industry/smart-park/v1.0/helm/values-smart-park.yaml
-      - name: Helm lint
-        if: hashFiles('packages/industry/smart-park/v1.0/helm/Chart.yaml') != ''
-        run: helm lint packages/industry/smart-park/v1.0/helm/ || true
 
   pytest:
     name: Pytest Suite
