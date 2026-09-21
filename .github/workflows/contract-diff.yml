@@ -21,13 +21,13 @@ jobs:
     timeout-minutes: 15
     steps:
       - name: Checkout PR
-        uses: actions/checkout@v5
+        uses: actions/checkout@v4
         with:
           ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 0
 
       - name: Set up Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@v5
         with:
           python-version: '3.11'
           cache: 'pip'
@@ -68,9 +68,9 @@ jobs:
           fi
           echo "contract_diff_passed=true" >> $GITHUB_OUTPUT
           echo "## Contract Diff Result" >> $GITHUB_STEP_SUMMARY
-          echo "\`\`\`json" >> $GITHUB_STEP_SUMMARY
+          echo "```json" >> $GITHUB_STEP_SUMMARY
           echo "$RESULT" >> $GITHUB_STEP_SUMMARY
-          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          echo "```" >> $GITHUB_STEP_SUMMARY
 
       - name: Post comment on failure
         if: failure()
@@ -84,7 +84,7 @@ jobs:
                 issue_number: context.issue.number,
                 owner: context.repo.owner,
                 repo: context.repo.repo,
-                body: `❌ **Contract Diff Gate FAILED**\n\nBreaking change detected in Universal Contract v1.0:\n\`\`\`json\n${diff}\n\`\`\`\n\nAll changes to Universal Contract v1.0 must go through ARB approval and MAJOR version bump.`
+                body: '❌ **Contract Diff Gate FAILED**\n\nBreaking change detected in Universal Contract v1.0:\n```\n' + diff + '\n```\n\nAll changes to Universal Contract v1.0 must go through ARB approval and MAJOR version bump.'
               });
             } catch (e) {
               github.rest.issues.createComment({
@@ -105,12 +105,12 @@ jobs:
       fail-fast: false
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v4
 
       - name: Set up Helm
-        uses: azure/setup-helm@v4
+        uses: azure/setup-helm@v3
         with:
-          version: v3.15.0
+          version: v3.14.0
 
       - name: Check Smart Park package
         id: check
@@ -119,7 +119,7 @@ jobs:
             echo "package_ready=true" >> $GITHUB_OUTPUT
           else
             echo "package_ready=false" >> $GITHUB_OUTPUT
-            echo "⚠️ Smart Park v1.0 Helm charts not yet available (P0-04 in progress, Day 5)"
+            echo "Smart Park v1.0 Helm charts not yet available (P0-04 in progress, Day 5)"
           fi
 
       - name: Helm template validation
@@ -130,16 +130,16 @@ jobs:
             -n dt-lite-${{ matrix.env }} \
             -f packages/industry/smart-park/v1.0/helm/values-smart-park.yaml \
             > /tmp/render-${{ matrix.env }}.yaml
-          echo "✅ Helm template rendered successfully for ${{ matrix.env }}"
+          echo "Helm template rendered successfully for ${{ matrix.env }}"
 
       - name: Helm lint
         if: steps.check.outputs.package_ready == 'true'
         run: |
-          helm lint packages/industry/smart-park/v1.0/helm/ || echo "⚠️ Helm lint completed with warnings (non-blocking)"
+          helm lint packages/industry/smart-park/v1.0/helm/ || echo "Helm lint completed with warnings (non-blocking)"
 
       - name: Upload render artifacts
-        if: always() && steps.check.outputs.package_ready == 'true'
-        uses: actions/upload-artifact@v5
+        if: steps.check.outputs.package_ready == 'true'
+        uses: actions/upload-artifact@v4
         with:
           name: render-${{ matrix.env }}
           path: /tmp/render-${{ matrix.env }}.yaml
@@ -148,7 +148,7 @@ jobs:
       - name: Skip notification
         if: steps.check.outputs.package_ready == 'false'
         run: |
-          echo "🟡 helm-test (${{ matrix.env }}): SKIPPED — Smart Park v1.0 package not yet ready (P0-04)"
+          echo "helm-test (${{ matrix.env }}): SKIPPED — Smart Park v1.0 package not yet ready (P0-04)"
 
   pytest:
     name: Pytest Suite
@@ -156,10 +156,10 @@ jobs:
     timeout-minutes: 15
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v4
 
       - name: Set up Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@v5
         with:
           python-version: '3.11'
           cache: 'pip'
@@ -200,7 +200,7 @@ jobs:
 
       - name: Upload coverage
         if: always()
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v4
         with:
           name: coverage-report
           path: coverage.xml
@@ -226,7 +226,7 @@ jobs:
           done
           echo "" >> $GITHUB_STEP_SUMMARY
           if [ "${{ needs.contract-diff.result }}" = "success" ] && [ "${{ needs.pytest.result }}" = "success" ]; then
-            echo "✅ **Core gates passed** — Ready for merge (helm-test skipped pending P0-04)" >> $GITHUB_STEP_SUMMARY
+            echo "Core gates passed — Ready for merge (helm-test skipped pending P0-04)" >> $GITHUB_STEP_SUMMARY
           else
-            echo "❌ **Gate failed** — Review required before merge" >> $GITHUB_STEP_SUMMARY
+            echo "Gate failed — Review required before merge" >> $GITHUB_STEP_SUMMARY
           fi
