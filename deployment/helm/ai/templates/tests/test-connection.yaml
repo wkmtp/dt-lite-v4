@@ -9,5 +9,5 @@ spec:
   containers:
     - name: wget
       image: busybox:1.36
-      command: ['wget', '--spider', 'http://localhost:8080/health']
+      command: ['wget', '--spider', 'http://{{ .Release.Name }}-ai:80/health']
   restartPolicy: Never
