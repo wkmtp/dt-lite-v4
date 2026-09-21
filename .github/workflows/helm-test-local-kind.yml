@@ -1,0 +1,58 @@
+name: Phase 0 - Helm Test (Local Kind)
+
+on:
+  push:
+    branches: [main, release/**]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test-local-kind:
+    name: Test on Local Kind Cluster
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Kind cluster
+        uses: helm/kind-action@v1.10.0
+        with:
+          cluster_name: kind-dt-lite-lab
+
+      - name: Setup Helm
+        uses: azure/setup-helm@v3
+        with:
+          version: v3.13.0
+
+      - name: Create namespace
+        run: kubectl create namespace dt-lite-dev
+
+      - name: Install Helm chart
+        run: |
+          helm install dt-lite-smart-park-dev deployment/helm/ai \
+            -n dt-lite-dev \
+            --set postgresql.enabled=false \
+            --set redis.enabled=false \
+            --set prometheus.enabled=false \
+            --set replicaCount=1
+
+      - name: Wait for pods to be ready
+        run: |
+          echo "Waiting for pods to be ready..."
+          kubectl wait --for=condition=ready pod -l app=dt-lite-ai -n dt-lite-dev --timeout=120s
+
+      - name: Run Helm test
+        run: helm test dt-lite-smart-park-dev -n dt-lite-dev --logs --timeout 10m
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: helm-test-results
+          path: |
+            ~/.helm/repositories/*.yaml
+            ~/.cache/helm/repository/*.yaml
