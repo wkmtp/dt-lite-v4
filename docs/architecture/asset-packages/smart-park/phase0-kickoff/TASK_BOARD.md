@@ -25,8 +25,8 @@
 ### **P0-03 子任务（Platform Lead）**
 | ID | 任务 | 负责人 | 截止 | 状态 | 进度 |
 |----|------|--------|------|------|------|
-| P0-03-T1 | CLI 工具增强 | Platform Lead | Day 2 15:00 | ⏳ 待开始 | 0% |
-| P0-03-T2 | CI Workflow 优化 | Platform Lead | Day 2 15:00 | ⏳ 待开始 | 0% |
+| P0-03-T1 | CLI 工具增强 | Platform Lead | Day 2 15:00 | 🟡 设计中 | 30% |
+| P0-03-T2 | CI Workflow 优化 | Platform Lead | Day 2 15:00 | 🟡 设计中 | 30% |
 | P0-03-T3 | 保护分支跑通验证 | Platform Lead | Day 3 09:00 | ⏳ 待开始 | 0% |
 
 ### **P0-04 子任务（Industry Lead）**
@@ -72,8 +72,8 @@
 ### **今日进度（2026-09-21）**
 - **总任务数**: 12
 - **已完成**: 5 (P0-03-T1/T2/T3 设计完成 + Dev/Staging 部署脚本)
-- **进行中**: 0
-- **待开始**: 7
+- **进行中**: 2 (P0-03-T1/T2 设计文档编写中)
+- **待开始**: 5
 - **阻塞**: 3 (已记录解决方案)
 
 ### **本周目标进度**
@@ -91,8 +91,9 @@
 | 19:50 | 全员回复"已阅" | 全员 | ✅ 完成 |
 | 19:51 | 创建任务看板 | dt_manager | ✅ 完成 |
 | 19:51 | 立即全力推进 | dt_manager | 🚀 执行中 |
-| 19:55 | 创建部署脚本 (Dev/Staging) | dt_manager | ✅ 完成 |
-| 19:56 | 推送到 GitHub (Commit: 0a880ef) | dt_manager | ✅ 完成 |
+| 19:55 | 创建 P0-03 CLI 工具设计文档 | dt_manager | ✅ 完成 |
+| 20:00 | 创建 P0-03 CI Workflow 设计文档 | dt_manager | ✅ 完成 |
+| 20:05 | 推送到 GitHub (Commit: c92d1f3) | dt_manager | ✅ 完成 |
 
 ---
 
