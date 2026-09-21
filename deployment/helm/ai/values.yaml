@@ -1,41 +1,30 @@
 # DT-Lite AI Service — Values for Helm Chart
-replicaCount: 2
+replicaCount: 1
 
 image:
-  repository: registry.local/dt-lite-ai
-  tag: "latest"
+  repository: busybox
+  tag: "1.36"
   pullPolicy: IfNotPresent
 
 service:
   type: ClusterIP
   port: 80
-  targetPort: 8080
+  targetPort: 80
   metricsPort: 9090
 
 ingress:
-  enabled: true
-  className: nginx
-  hosts:
-    - host: ai.dtlite.local
-      paths:
-        - path: /
-          pathType: Prefix
-  tls: []
+  enabled: false
 
 resources:
   requests:
-    cpu: 500m
-    memory: 1Gi
+    cpu: 50m
+    memory: 64Mi
   limits:
-    cpu: "2"
-    memory: 4Gi
+    cpu: 100m
+    memory: 128Mi
 
 autoscaling:
-  enabled: true
-  minReplicas: 2
-  maxReplicas: 10
-  targetCPUUtilizationPercentage: 60
-  targetMemoryUtilizationPercentage: 75
+  enabled: false
 
 postgresql:
   enabled: true
