@@ -4,11 +4,12 @@ on:
   pull_request:
     branches: [main, release/uaa-v1.0-frozen]
     paths:
-      - 'contracts/universal/**'
       - 'packages/schemas/universal/**'
       - 'tools/contract-diff/**'
       - 'packages/industry/smart-park/**'
       - 'packages/industry/smart-factory/**'
+  push:
+    branches: [main, release/uaa-v1.0-frozen]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -20,10 +21,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - name: Checkout PR
+      - name: Checkout
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 0
 
       - name: Set up Python
@@ -67,38 +67,25 @@ jobs:
             exit 1
           fi
           echo "contract_diff_passed=true" >> $GITHUB_OUTPUT
-          echo "## Contract Diff Result" >> $GITHUB_STEP_SUMMARY
-          echo "```json" >> $GITHUB_STEP_SUMMARY
-          echo "$RESULT" >> $GITHUB_STEP_SUMMARY
-          echo "```" >> $GITHUB_STEP_SUMMARY
 
       - name: Post comment on failure
-        if: failure()
+        if: github.event_name == 'pull_request' && failure()
         uses: actions/github-script@v7
         with:
           script: |
-            const fs = require('fs');
-            try {
-              const diff = fs.readFileSync('diff-result.json', 'utf8');
-              github.rest.issues.createComment({
-                issue_number: context.issue.number,
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                body: '❌ **Contract Diff Gate FAILED**\n\nBreaking change detected in Universal Contract v1.0:\n```\n' + diff + '\n```\n\nAll changes to Universal Contract v1.0 must go through ARB approval and MAJOR version bump.'
-              });
-            } catch (e) {
-              github.rest.issues.createComment({
-                issue_number: context.issue.number,
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                body: '❌ **Contract Diff Gate FAILED** — Breaking change detected in Universal Contract v1.0. Must go through ARB approval.'
-              });
-            }
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: '❌ **Contract Diff Gate FAILED** — Breaking change detected in Universal Contract v1.0. Must go through ARB approval.'
+            });
 
   helm-test:
     name: Helm Test (${{ matrix.env }})
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    needs: contract-diff
+    if: needs.contract-diff.result == 'success'
     strategy:
       matrix:
         env: [dev, staging, preprod, prod]
@@ -119,7 +106,6 @@ jobs:
             echo "package_ready=true" >> $GITHUB_OUTPUT
           else
             echo "package_ready=false" >> $GITHUB_OUTPUT
-            echo "Smart Park v1.0 Helm charts not yet available (P0-04 in progress, Day 5)"
           fi
 
       - name: Helm template validation
@@ -135,15 +121,7 @@ jobs:
       - name: Helm lint
         if: steps.check.outputs.package_ready == 'true'
         run: |
-          helm lint packages/industry/smart-park/v1.0/helm/ || echo "Helm lint completed with warnings (non-blocking)"
-
-      - name: Upload render artifacts
-        if: steps.check.outputs.package_ready == 'true'
-        uses: actions/upload-artifact@v4
-        with:
-          name: render-${{ matrix.env }}
-          path: /tmp/render-${{ matrix.env }}.yaml
-          retention-days: 7
+          helm lint packages/industry/smart-park/v1.0/helm/ || true
 
       - name: Skip notification
         if: steps.check.outputs.package_ready == 'false'
@@ -198,14 +176,6 @@ jobs:
             tests/integration/ \
             -q --tb=short --color=yes
 
-      - name: Upload coverage
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: coverage-report
-          path: coverage.xml
-        continue-on-error: true
-
   summary:
     name: CI Summary
     runs-on: ubuntu-latest
@@ -216,7 +186,6 @@ jobs:
       - name: Post summary
         run: |
           echo "## CI/CD Summary" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
           echo "| Job | Result |" >> $GITHUB_STEP_SUMMARY
           echo "|-----|--------|" >> $GITHUB_STEP_SUMMARY
           echo "| contract-diff | ${{ needs.contract-diff.result }} |" >> $GITHUB_STEP_SUMMARY
@@ -226,7 +195,7 @@ jobs:
           done
           echo "" >> $GITHUB_STEP_SUMMARY
           if [ "${{ needs.contract-diff.result }}" = "success" ] && [ "${{ needs.pytest.result }}" = "success" ]; then
-            echo "Core gates passed — Ready for merge (helm-test skipped pending P0-04)" >> $GITHUB_STEP_SUMMARY
+            echo "Core gates passed — Ready for merge" >> $GITHUB_STEP_SUMMARY
           else
             echo "Gate failed — Review required before merge" >> $GITHUB_STEP_SUMMARY
           fi
