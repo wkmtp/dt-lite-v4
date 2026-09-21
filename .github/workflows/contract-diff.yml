@@ -10,29 +10,38 @@ on:
       - 'packages/industry/smart-park/**'
       - 'packages/industry/smart-factory/**'
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   contract-diff:
     name: Contract Diff Gate
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - name: Checkout PR
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 0
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: '3.11'
+          cache: 'pip'
 
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -e packages/schemas/ 2>/dev/null || true
-          pip install -e tools/contract-diff/ 2>/dev/null || true
+          pip install -e packages/schemas/
+          pip install -e tools/contract-diff/
+          pip install -e tools/golden_validator/
+          pip install -e tools/scenario_runner/
+          pip install pytest pytest-asyncio
 
-      - name: Run contract self-diff
+      - name: Run contract self-diff tests
         run: |
           python -m pytest tests/contracts/test_compatibility.py::TestCompatibility::test_self_diff_is_zero \
                           tests/contracts/test_compatibility.py::TestCompatibility::test_all_schemas_self_diff_zero \
@@ -44,18 +53,24 @@ jobs:
             --baseline packages/schemas/universal/ \
             --target packages/schemas/universal/ \
             --output diff-result.json
+          cat diff-result.json
 
       - name: Check breaking changes
+        id: check
         run: |
           RESULT=$(cat diff-result.json)
-          BREAKING=$(echo "$RESULT" | python -c "import sys,json; d=json.load(sys.stdin); print(d.get('breaking', False))")
-          if [ "$BREAKING" = "True" ]; then
+          BREAKING=$(echo "$RESULT" | python -c "import sys,json; d=json.load(sys.stdin); print(str(d.get('breaking', False)).lower())")
+          echo "breaking=$BREAKING"
+          if [ "$BREAKING" = "true" ]; then
             echo "::error::Breaking change detected in Universal Contract"
             echo "$RESULT"
             exit 1
           fi
-          echo "Contract diff result: $RESULT"
+          echo "contract_diff_passed=true" >> $GITHUB_OUTPUT
+          echo "## Contract Diff Result" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`json" >> $GITHUB_STEP_SUMMARY
           echo "$RESULT" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
 
       - name: Post comment on failure
         if: failure()
@@ -83,60 +98,71 @@ jobs:
   helm-test:
     name: Helm Test (${{ matrix.env }})
     runs-on: ubuntu-latest
-    needs: contract-diff
-    if: needs.contract-diff.result == 'success'
+    timeout-minutes: 10
     strategy:
       matrix:
         env: [dev, staging, preprod, prod]
       fail-fast: false
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Helm
-        uses: azure/setup-helm@v3
+        uses: azure/setup-helm@v4
         with:
-          version: v3.14.0
+          version: v3.15.0
+
+      - name: Check Smart Park package
+        id: check
+        run: |
+          if [ -d "packages/industry/smart-park/v1.0/helm" ]; then
+            echo "package_ready=true" >> $GITHUB_OUTPUT
+          else
+            echo "package_ready=false" >> $GITHUB_OUTPUT
+            echo "⚠️ Smart Park v1.0 Helm charts not yet available (P0-04 in progress, Day 5)"
+          fi
 
       - name: Helm template validation
+        if: steps.check.outputs.package_ready == 'true'
         run: |
-          if [ -d "packages/industry/smart-park/v1.0/helm" ]; then
-            helm template dt-lite-smart-park-${{ matrix.env }} \
-              packages/industry/smart-park/v1.0/helm/ \
-              -n dt-lite-${{ matrix.env }} \
-              -f packages/industry/smart-park/v1.0/helm/values-smart-park.yaml \
-              > /tmp/render-${{ matrix.env }}.yaml
-            echo "Helm template rendered successfully for ${{ matrix.env }}"
-          else
-            echo "Smart Park v1.0 Helm charts not yet available (P0-04 in progress)"
-            echo "Skipping helm test for ${{ matrix.env }}"
-          fi
+          helm template dt-lite-smart-park-${{ matrix.env }} \
+            packages/industry/smart-park/v1.0/helm/ \
+            -n dt-lite-${{ matrix.env }} \
+            -f packages/industry/smart-park/v1.0/helm/values-smart-park.yaml \
+            > /tmp/render-${{ matrix.env }}.yaml
+          echo "✅ Helm template rendered successfully for ${{ matrix.env }}"
 
       - name: Helm lint
+        if: steps.check.outputs.package_ready == 'true'
         run: |
-          if [ -d "packages/industry/smart-park/v1.0/helm" ]; then
-            helm lint packages/industry/smart-park/v1.0/helm/ || echo "Lint completed with warnings"
-          fi
+          helm lint packages/industry/smart-park/v1.0/helm/ || echo "⚠️ Helm lint completed with warnings (non-blocking)"
 
       - name: Upload render artifacts
-        if: always()
-        uses: actions/upload-artifact@v4
+        if: always() && steps.check.outputs.package_ready == 'true'
+        uses: actions/upload-artifact@v5
         with:
           name: render-${{ matrix.env }}
-          path: /tmp/render-*.yaml
+          path: /tmp/render-${{ matrix.env }}.yaml
           retention-days: 7
+
+      - name: Skip notification
+        if: steps.check.outputs.package_ready == 'false'
+        run: |
+          echo "🟡 helm-test (${{ matrix.env }}): SKIPPED — Smart Park v1.0 package not yet ready (P0-04)"
 
   pytest:
     name: Pytest Suite
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: '3.11'
+          cache: 'pip'
 
       - name: Install dependencies
         run: |
@@ -149,33 +175,43 @@ jobs:
 
       - name: Run core tests
         run: |
-          python -m pytest tests/asset/ tests/capability/ tests/external/ tests/contracts/ \
-                          tests/assembly/ tests/golden/ tests/compatibility/ tests/sync/ \
-                          tests/edge/ tests/application/test_uaa06_dashboard_workflow.py \
-                          -k "not current_layout" \
-                          tests/twin/test_identity_boundary.py \
-                          tests/ai/test_uaa07_ai_security.py \
-                          tests/activation/test_activation.py \
-                          tests/activation/test_architecture.py \
-                          tests/activation/test_binding.py \
-                          tests/activation/test_command.py \
-                          tests/activation/test_models.py \
-                          tests/activation/test_security.py \
-                          tests/integration/ \
-                          -q --tb=short
+          python -m pytest \
+            tests/asset/ \
+            tests/capability/ \
+            tests/external/ \
+            tests/contracts/ \
+            tests/assembly/ \
+            tests/golden/ \
+            tests/compatibility/ \
+            tests/sync/ \
+            tests/edge/ \
+            tests/application/test_uaa06_dashboard_workflow.py \
+            -k "not current_layout" \
+            tests/twin/test_identity_boundary.py \
+            tests/ai/test_uaa07_ai_security.py \
+            tests/activation/test_activation.py \
+            tests/activation/test_architecture.py \
+            tests/activation/test_binding.py \
+            tests/activation/test_command.py \
+            tests/activation/test_models.py \
+            tests/activation/test_security.py \
+            tests/integration/ \
+            -q --tb=short --color=yes
 
       - name: Upload coverage
-        uses: actions/upload-artifact@v4
+        if: always()
+        uses: actions/upload-artifact@v5
         with:
           name: coverage-report
           path: coverage.xml
-        if: always()
+        continue-on-error: true
 
   summary:
     name: CI Summary
     runs-on: ubuntu-latest
     needs: [contract-diff, helm-test, pytest]
     if: always()
+    timeout-minutes: 5
     steps:
       - name: Post summary
         run: |
@@ -190,7 +226,7 @@ jobs:
           done
           echo "" >> $GITHUB_STEP_SUMMARY
           if [ "${{ needs.contract-diff.result }}" = "success" ] && [ "${{ needs.pytest.result }}" = "success" ]; then
-            echo "✅ **All gates passed** — Ready for merge" >> $GITHUB_STEP_SUMMARY
+            echo "✅ **Core gates passed** — Ready for merge (helm-test skipped pending P0-04)" >> $GITHUB_STEP_SUMMARY
           else
             echo "❌ **Gate failed** — Review required before merge" >> $GITHUB_STEP_SUMMARY
           fi
