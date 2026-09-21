@@ -20,10 +20,6 @@ jobs:
           python-version: '3.11'
 
       - run: pip install pytest pytest-asyncio
-      - run: pip install -e packages/schemas/
-      - run: pip install -e tools/contract-diff/
-      - run: pip install -e tools/golden_validator/
-      - run: pip install -e tools/scenario_runner/
 
       - name: Run self-diff tests
         run: python -m pytest tests/contracts/test_compatibility.py::TestCompatibility::test_self_diff_is_zero tests/contracts/test_compatibility.py::TestCompatibility::test_all_schemas_self_diff_zero -v
@@ -36,9 +32,9 @@ jobs:
       - name: Check result
         run: |
           RESULT=$(cat diff-result.json)
-          BREAKING=$(echo "$RESULT" | python -c "import sys,json; d=json.load(sys.stdin); print(d.get('breaking', False))")
-          if [ "$BREAKING" = "True" ]; then exit 1; fi
-          echo "Contract diff: ZERO"
+          BREAKING=$(echo "$RESULT" | python -c "import sys,json; d=json.load(sys.stdin); print(d.get('is_frozen', False))")
+          if [ "$BREAKING" = "False" ]; then exit 1; fi
+          echo "Contract diff: FROZEN"
 
   pytest:
     name: Pytest Suite
@@ -49,8 +45,4 @@ jobs:
         with:
           python-version: '3.11'
       - run: pip install pytest pytest-asyncio
-      - run: pip install -e packages/schemas/
-      - run: pip install -e tools/contract-diff/
-      - run: pip install -e tools/golden_validator/
-      - run: pip install -e tools/scenario_runner/
       - run: python -m pytest tests/asset/ tests/capability/ tests/external/ tests/contracts/ tests/assembly/ tests/golden/ tests/compatibility/ tests/sync/ tests/edge/ tests/application/test_uaa06_dashboard_workflow.py -k "not current_layout" tests/twin/test_identity_boundary.py tests/ai/test_uaa07_ai_security.py tests/activation/test_activation.py tests/activation/test_architecture.py tests/activation/test_binding.py tests/activation/test_command.py tests/activation/test_models.py tests/activation/test_security.py tests/integration/ -q
