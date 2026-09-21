@@ -64,27 +64,27 @@ class TestIngestSingle:
     async def test_ingest_single_success(self, sample_telemetry, sample_device, sample_datapoint):
         """Test successful single telemetry ingestion."""
         mock_session = AsyncMock()
-        
+
         # Create mock objects for the services
         mock_telemetry_repo = MagicMock()
         mock_device_repo = MagicMock()
         mock_datapoint_repo = MagicMock()
-        
+
         # Mock the repository methods
         mock_device_repo.get_by_id_for_tenant = AsyncMock(return_value=sample_device)
         mock_datapoint_repo.get_by_id_for_tenant = AsyncMock(return_value=sample_datapoint)
         mock_point = MagicMock()
         mock_point.id = uuid4()
         mock_telemetry_repo.save = AsyncMock(return_value=mock_point)
-        
+
         # Create service with mocked repositories
         with patch('services.telemetry.services.TelemetryRepository', return_value=mock_telemetry_repo), \
              patch('services.telemetry.services.DeviceRepository', return_value=mock_device_repo), \
              patch('services.telemetry.services.DataPointRepository', return_value=mock_datapoint_repo):
-            
+
             service = TelemetryIngestionService(mock_session)
             result = await service.ingest(sample_telemetry, sample_device.tenant_id)
-            
+
             assert result is not None
             mock_device_repo.get_by_id_for_tenant.assert_called_once()
             mock_datapoint_repo.get_by_id_for_tenant.assert_called_once()
@@ -94,14 +94,14 @@ class TestIngestSingle:
     async def test_ingest_single_invalid_data_type(self, sample_telemetry):
         """Test ingestion fails with invalid data type."""
         mock_session = AsyncMock()
-        
+
         # Invalid data_type
         sample_telemetry.data_type = "INVALID_TYPE"
-        
+
         with patch('services.telemetry.services.TelemetryRepository'), \
              patch('services.telemetry.services.DeviceRepository'), \
              patch('services.telemetry.services.DataPointRepository'):
-            
+
             service = TelemetryIngestionService(mock_session)
             with pytest.raises(TelemetryValidationError):
                 await service.ingest(sample_telemetry, sample_telemetry.tenant_id)
@@ -110,14 +110,14 @@ class TestIngestSingle:
     async def test_ingest_single_invalid_quality(self, sample_telemetry):
         """Test ingestion fails with invalid quality."""
         mock_session = AsyncMock()
-        
+
         # Invalid quality
         sample_telemetry.quality = "INVALID_QUALITY"
-        
+
         with patch('services.telemetry.services.TelemetryRepository'), \
              patch('services.telemetry.services.DeviceRepository'), \
              patch('services.telemetry.services.DataPointRepository'):
-            
+
             service = TelemetryIngestionService(mock_session)
             with pytest.raises(TelemetryValidationError):
                 await service.ingest(sample_telemetry, sample_telemetry.tenant_id)
@@ -126,17 +126,17 @@ class TestIngestSingle:
     async def test_ingest_single_missing_device(self, sample_telemetry):
         """Test ingestion fails when device not found."""
         mock_session = AsyncMock()
-        
+
         mock_device_repo = MagicMock()
         mock_datapoint_repo = MagicMock()
-        
+
         mock_device_repo.get_by_id_for_tenant = AsyncMock(return_value=None)
         mock_datapoint_repo.get_by_id_for_tenant = AsyncMock()
-        
+
         with patch('services.telemetry.services.TelemetryRepository'), \
              patch('services.telemetry.services.DeviceRepository', return_value=mock_device_repo), \
              patch('services.telemetry.services.DataPointRepository', return_value=mock_datapoint_repo):
-            
+
             service = TelemetryIngestionService(mock_session)
             with pytest.raises(TelemetryDeviceNotFoundError):
                 await service.ingest(sample_telemetry, uuid4())
@@ -145,17 +145,17 @@ class TestIngestSingle:
     async def test_ingest_single_missing_datapoint(self, sample_telemetry, sample_device):
         """Test ingestion fails when datapoint not found."""
         mock_session = AsyncMock()
-        
+
         mock_device_repo = MagicMock()
         mock_datapoint_repo = MagicMock()
-        
+
         mock_device_repo.get_by_id_for_tenant = AsyncMock(return_value=sample_device)
         mock_datapoint_repo.get_by_id_for_tenant = AsyncMock(return_value=None)
-        
+
         with patch('services.telemetry.services.TelemetryRepository'), \
              patch('services.telemetry.services.DeviceRepository', return_value=mock_device_repo), \
              patch('services.telemetry.services.DataPointRepository', return_value=mock_datapoint_repo):
-            
+
             service = TelemetryIngestionService(mock_session)
             with pytest.raises(TelemetryTenantMismatchError):
                 await service.ingest(sample_telemetry, sample_device.tenant_id)
@@ -168,7 +168,7 @@ class TestIngestBatch:
     async def test_ingest_batch_success(self, sample_device, sample_datapoint):
         """Test successful batch ingestion."""
         mock_session = AsyncMock()
-        
+
         # Create multiple telemetry points
         telemetries = [
             NormalizedTelemetry(
@@ -184,22 +184,22 @@ class TestIngestBatch:
             )
             for _ in range(5)
         ]
-        
+
         mock_telemetry_repo = MagicMock()
         mock_device_repo = MagicMock()
         mock_datapoint_repo = MagicMock()
-        
+
         mock_device_repo.get_by_id_for_tenant = AsyncMock(return_value=sample_device)
         mock_datapoint_repo.get_by_id_for_tenant = AsyncMock(return_value=sample_datapoint)
         mock_telemetry_repo.save_batch = AsyncMock(return_value=5)
-        
+
         with patch('services.telemetry.services.TelemetryRepository', return_value=mock_telemetry_repo), \
              patch('services.telemetry.services.DeviceRepository', return_value=mock_device_repo), \
              patch('services.telemetry.services.DataPointRepository', return_value=mock_datapoint_repo):
-            
+
             service = TelemetryIngestionService(mock_session)
             count = await service.ingest_batch(telemetries, sample_device.tenant_id)
-            
+
             assert count == 5
             mock_device_repo.get_by_id_for_tenant.assert_called_once()
             mock_datapoint_repo.get_by_id_for_tenant.assert_called_once()
@@ -209,21 +209,21 @@ class TestIngestBatch:
     async def test_ingest_batch_empty_list(self):
         """Test batch ingestion with empty list."""
         mock_session = AsyncMock()
-        
+
         with patch('services.telemetry.services.TelemetryRepository'), \
              patch('services.telemetry.services.DeviceRepository'), \
              patch('services.telemetry.services.DataPointRepository'):
-            
+
             service = TelemetryIngestionService(mock_session)
             count = await service.ingest_batch([], uuid4())
-            
+
             assert count == 0
 
     @pytest.mark.asyncio
     async def test_ingest_batch_invalid_point_fails_all(self, sample_device, sample_datapoint):
         """Test batch fails if any point is invalid."""
         mock_session = AsyncMock()
-        
+
         telemetries = [
             NormalizedTelemetry(
                 tenant_id=str(sample_device.tenant_id),
@@ -248,17 +248,17 @@ class TestIngestBatch:
                 metadata={},
             ),
         ]
-        
+
         mock_device_repo = MagicMock()
         mock_datapoint_repo = MagicMock()
-        
+
         mock_device_repo.get_by_id_for_tenant = AsyncMock(return_value=sample_device)
         mock_datapoint_repo.get_by_id_for_tenant = AsyncMock(return_value=sample_datapoint)
-        
+
         with patch('services.telemetry.services.TelemetryRepository'), \
              patch('services.telemetry.services.DeviceRepository', return_value=mock_device_repo), \
              patch('services.telemetry.services.DataPointRepository', return_value=mock_datapoint_repo):
-            
+
             service = TelemetryIngestionService(mock_session)
             with pytest.raises(TelemetryValidationError):
                 await service.ingest_batch(telemetries, sample_device.tenant_id)

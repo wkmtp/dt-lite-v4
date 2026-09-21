@@ -1,0 +1,502 @@
+# OpenAPI 3.1.0 — DT-Lite Edge Node API
+
+openapi: "3.1.0"
+info:
+  title: DT-Lite Edge Node API
+  description: |
+    Edge Computing Runtime API for DT-Lite v4.0.
+    Provides device connectivity, local telemetry storage, edge inference,
+    and bidirectional sync with the cloud.
+  version: 4.18.0
+  contact:
+    name: DT-Lite Team
+    email: dev@dt-lite.local
+  license:
+    name: Proprietary
+
+servers:
+  - url: http://edge-node:8080
+    description: Edge Node (local)
+  - url: https://edge.dtlite.local
+    description: Edge Node (cloud-facing)
+
+tags:
+  - name: edge
+    description: Edge Node lifecycle and health
+  - name: provision
+    description: Edge provisioning and authentication
+  - name: telemetry
+    description: Local telemetry storage and query
+  - name: sync
+    description: Bidirectional sync with cloud
+  - name: compute
+    description: Edge inference and rules
+  - name: adapters
+    description: Protocol adapters management
+  - name: ota
+    description: OTA firmware updates
+
+paths:
+  /health:
+    get:
+      tags: [edge]
+      summary: Health check
+      description: Returns edge node health status
+      operationId: getHealth
+      responses:
+        '200':
+          description: Service healthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+        '503':
+          description: Service unhealthy
+
+  /api/v1/edge/provision:
+    post:
+      tags: [provision]
+      summary: Provision edge node
+      description: Register edge node with cloud using provisioning token
+      operationId: provisionEdgeNode
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProvisionRequest'
+      responses:
+        '200':
+          description: Provisioning successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProvisionResponse'
+        '400':
+          description: Invalid token
+        '409':
+          description: Node already provisioned
+
+  /api/v1/edge/heartbeat:
+    post:
+      tags: [edge]
+      summary: Heartbeat
+      description: Send heartbeat to cloud with resource usage
+      operationId: sendHeartbeat
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/HeartbeatRequest'
+      responses:
+        '200':
+          description: Heartbeat acknowledged
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HeartbeatResponse'
+
+  /api/v1/edge/config:
+    get:
+      tags: [edge]
+      summary: Get configuration
+      operationId: getConfig
+      responses:
+        '200':
+          description: Current configuration
+    put:
+      tags: [edge]
+      summary: Update configuration
+      operationId: updateConfig
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                config:
+                  type: object
+      responses:
+        '200':
+          description: Configuration updated
+
+  /api/v1/edge/quota:
+    get:
+      tags: [edge]
+      summary: Get resource quota
+      operationId: getQuota
+      responses:
+        '200':
+          description: Current quota settings
+
+  /api/v1/edge/usage:
+    get:
+      tags: [edge]
+      summary: Get resource usage
+      operationId: getUsage
+      responses:
+        '200':
+          description: Current resource usage
+
+  /api/v1/storage/telemetry/batch:
+    post:
+      tags: [telemetry]
+      summary: Batch write telemetry
+      description: Write telemetry points to local storage
+      operationId: batchWriteTelemetry
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                points:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/TelemetryPoint'
+                tenant_id:
+                  type: string
+      responses:
+        '200':
+          description: Write result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WriteResponse'
+
+  /api/v1/storage/telemetry/query:
+    post:
+      tags: [telemetry]
+      summary: Query telemetry
+      description: Query telemetry points from local storage
+      operationId: queryTelemetry
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                asset_id:
+                  type: string
+                property_code:
+                  type: string
+                start_time:
+                  type: string
+                  format: date-time
+                end_time:
+                  type: string
+                  format: date-time
+                limit:
+                  type: integer
+                  default: 1000
+      responses:
+        '200':
+          description: Query results
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QueryResponse'
+
+  /api/v1/compute/models:
+    get:
+      tags: [compute]
+      summary: List models
+      operationId: listModels
+      responses:
+        '200':
+          description: List of loaded models
+    post:
+      tags: [compute]
+      summary: Load model
+      operationId: loadModel
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoadModelRequest'
+      responses:
+        '200':
+          description: Model loaded
+
+  /api/v1/compute/predict:
+    post:
+      tags: [compute]
+      summary: Run inference
+      operationId: predict
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                model_id:
+                  type: string
+                input:
+                  type: object
+      responses:
+        '200':
+          description: Prediction result
+
+  /api/v1/edge/adapters:
+    get:
+      tags: [adapters]
+      summary: List adapters
+      operationId: listAdapters
+      responses:
+        '200':
+          description: List of registered adapters
+    post:
+      tags: [adapters]
+      summary: Register adapter
+      operationId: registerAdapter
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterAdapterRequest'
+      responses:
+        '200':
+          description: Adapter registered
+
+  /api/v1/edge/adapters/{adapter_id}/collect:
+    post:
+      tags: [adapters]
+      summary: Collect data
+      operationId: collectData
+      parameters:
+        - name: adapter_id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                points:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/EdgeTelemetryPoint'
+      responses:
+        '200':
+          description: Collection result
+
+  /api/v1/sync/ws:
+    get:
+      tags: [sync]
+      summary: WebSocket sync connection
+      description: Establish bidirectional sync connection
+      operationId: connectSync
+      responses:
+        '101':
+          description: WebSocket upgrade
+
+  /api/v1/ota/check:
+    get:
+      tags: [ota]
+      summary: Check for updates
+      operationId: checkOTAUpdate
+      responses:
+        '200':
+          description: Update available
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OTAPackage'
+
+  /api/v1/ota/install:
+    post:
+      tags: [ota]
+      summary: Install update
+      operationId: installOTA
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                package_id:
+                  type: string
+      responses:
+        '200':
+          description: Installation started
+
+components:
+  schemas:
+    HealthResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [ok, degraded, error]
+        uptime_s:
+          type: number
+        version:
+          type: string
+        components:
+          type: object
+          additionalProperties:
+            type: string
+
+    ProvisionRequest:
+      type: object
+      required: [token]
+      properties:
+        token:
+          type: string
+          minLength: 8
+        node_id:
+          type: string
+        tenant_id:
+          type: string
+
+    ProvisionResponse:
+      type: object
+      properties:
+        node_id:
+          type: string
+        config:
+          type: object
+        expires_at:
+          type: string
+          format: date-time
+
+    HeartbeatRequest:
+      type: object
+      properties:
+        node_id:
+          type: string
+        status:
+          type: string
+          enum: [running, degraded, error]
+        resources:
+          type: object
+
+    HeartbeatResponse:
+      type: object
+      properties:
+        ack:
+          type: boolean
+        next_heartbeat_ms:
+          type: integer
+        config_version:
+          type: string
+
+    TelemetryPoint:
+      type: object
+      properties:
+        asset_id:
+          type: string
+        property_code:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+        value:
+          type: number
+        data_type:
+          type: string
+          enum: [INT32, FLOAT, BOOLEAN, STRING]
+        unit:
+          type: string
+        quality:
+          type: string
+          enum: [GOOD, UNCERTAIN, BAD]
+        source_adapter:
+          type: string
+
+    EdgeTelemetryPoint:
+      allOf:
+        - $ref: '#/components/schemas/TelemetryPoint'
+        type: object
+        properties:
+          hlc:
+            $ref: '#/components/schemas/HLCTimestamp'
+
+    HLCTimestamp:
+      type: object
+      properties:
+        physical_ts:
+          type: integer
+        logical_counter:
+          type: integer
+        node_id:
+          type: string
+
+    WriteResponse:
+      type: object
+      properties:
+        accepted:
+          type: integer
+        rejected:
+          type: integer
+        stored_bytes:
+          type: integer
+
+    QueryResponse:
+      type: object
+      properties:
+        points:
+          type: array
+          items:
+            $ref: '#/components/schemas/TelemetryPoint'
+        total:
+          type: integer
+        limit:
+          type: integer
+
+    LoadModelRequest:
+      type: object
+      required: [model_id, path]
+      properties:
+        model_id:
+          type: string
+        path:
+          type: string
+        quantization:
+          type: string
+          enum: [FP32, FP16, INT8]
+
+    RegisterAdapterRequest:
+      type: object
+      required: [adapter_id, adapter_type, endpoint]
+      properties:
+        adapter_id:
+          type: string
+        adapter_type:
+          type: string
+          enum: [modbus, bacnet, mqtt, opcua]
+        endpoint:
+          type: string
+        config:
+          type: object
+
+    OTAPackage:
+      type: object
+      properties:
+        package_id:
+          type: string
+        version:
+          type: string
+        checksum_blake3:
+          type: string
+        signature_ed25519:
+          type: string
+        size_bytes:
+          type: integer
+        changelog:
+          type: string
+
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+security:
+  - bearerAuth: []

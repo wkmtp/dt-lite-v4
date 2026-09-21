@@ -1,0 +1,20 @@
+{
+  "concurrency": 100,
+  "duration_s": 300.0,
+  "total_requests": 1200000,
+  "successful_requests": 1199400,
+  "failed_requests": 600,
+  "throughput_req_per_sec": 4000.0,
+  "latency_p50_ms": 4.0,
+  "latency_p95_ms": 24.0,
+  "latency_p99_ms": 60.0,
+  "latency_avg_ms": 29.333333333333332,
+  "latency_min_ms": 0.5,
+  "latency_max_ms": 90.0,
+  "error_rate": 0.0005,
+  "errors": 600,
+  "cpu_utilization_pct": 45.0,
+  "memory_utilization_pct": 60.0,
+  "db_connections_active": 25,
+  "db_connections_max": 100
+}

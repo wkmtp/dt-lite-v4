@@ -25,15 +25,15 @@ class TestCrossTenantAccess:
     async def test_cross_tenant_device_rejected(self):
         """Test that accessing another tenant's device is rejected."""
         mock_session = AsyncMock()
-        
+
         with patch('services.telemetry.services.DeviceRepository') as MockDeviceRepo:
             mock_device_repo = AsyncMock()
             MockDeviceRepo.return_value = mock_device_repo
             mock_device_repo.get_by_id_for_tenant = AsyncMock(return_value=None)
-            
+
             service = TelemetryIngestionService(mock_session)
             service._device_repo = mock_device_repo
-            
+
             telemetry = NormalizedTelemetry(
                 tenant_id=str(uuid4()),
                 device_id=str(uuid4()),
@@ -45,7 +45,7 @@ class TestCrossTenantAccess:
                 quality="GOOD",
                 metadata={},
             )
-            
+
             with pytest.raises(TelemetryDeviceNotFoundError):
                 await service.ingest(telemetry, uuid4())
 
@@ -53,23 +53,23 @@ class TestCrossTenantAccess:
     async def test_cross_tenant_datapoint_rejected(self):
         """Test that accessing another tenant's datapoint is rejected."""
         mock_session = AsyncMock()
-        
+
         with patch('services.telemetry.services.DeviceRepository') as MockDeviceRepo, \
              patch('services.telemetry.services.DataPointRepository') as MockDataPointRepo:
-            
+
             mock_device_repo = AsyncMock()
             mock_datapoint_repo = AsyncMock()
-            
+
             MockDeviceRepo.return_value = mock_device_repo
             MockDataPointRepo.return_value = mock_datapoint_repo
-            
+
             mock_device_repo.get_by_id_for_tenant = AsyncMock(return_value=MagicMock())
             mock_datapoint_repo.get_by_id_for_tenant = AsyncMock(return_value=None)
-            
+
             service = TelemetryIngestionService(mock_session)
             service._device_repo = mock_device_repo
             service._datapoint_repo = mock_datapoint_repo
-            
+
             telemetry = NormalizedTelemetry(
                 tenant_id=str(uuid4()),
                 device_id=str(uuid4()),
@@ -81,7 +81,7 @@ class TestCrossTenantAccess:
                 quality="GOOD",
                 metadata={},
             )
-            
+
             with pytest.raises(TelemetryTenantMismatchError):
                 await service.ingest(telemetry, uuid4())
 
@@ -93,20 +93,20 @@ class TestNoAdapterDependency:
         """Verify telemetry service doesn't import from adapter."""
         import services.telemetry.services as telemetry_services
         source = telemetry_services.__file__
-        
+
         with open(source, 'r', encoding='utf-8') as f:
             content = f.read()
-        
+
         assert 'from services.adapter' not in content
         assert 'import services.adapter' not in content
 
     def test_no_protocol_names_in_code(self):
         """Verify no protocol names appear in code."""
         import services.telemetry.services as telemetry_services
-        
+
         with open(telemetry_services.__file__, 'r', encoding='utf-8') as f:
             content = f.read()
-        
+
         # Check that protocol names don't appear in executable code
         protocol_names = ['bacnet', 'modbus', 'opcua', 'mqtt', 'plc']
         for name in protocol_names:
@@ -122,7 +122,7 @@ class TestTenantIsolation:
     def test_tenant_id_not_in_schema(self):
         """Verify tenant_id is not exposed in request schemas."""
         from services.telemetry.schemas import TelemetryPointCreate
-        
+
         # Check using model_fields (Pydantic V2)
         assert 'tenant_id' not in TelemetryPointCreate.model_fields, \
             "tenant_id should not be in request schema"
@@ -130,7 +130,7 @@ class TestTenantIsolation:
     def test_query_response_no_tenant_info(self):
         """Verify query responses don't expose tenant information."""
         from services.telemetry.schemas import TelemetryQueryResponse
-        
+
         # Check using model_fields (Pydantic V2)
         assert 'tenant_id' not in TelemetryQueryResponse.model_fields, \
             "tenant_id should not be in response schema"
@@ -143,9 +143,9 @@ class TestTenantFilterRequired:
         """Verify repository applies tenant filter."""
         from services.telemetry.repositories import TelemetryRepository
         from services.core.repositories.base import TenantAwareRepository
-        
+
         # Verify inheritance
         assert issubclass(TelemetryRepository, TenantAwareRepository)
-        
+
         # Verify tenant filter method exists
         assert hasattr(TelemetryRepository, '_get_tenant_filter')

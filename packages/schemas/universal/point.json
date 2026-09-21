@@ -1,0 +1,92 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://dt-lite.schemas/universal/point.json",
+  "title": "Point",
+  "description": "Universal Point Semantic Contract v1.0 — FROZEN. Point defines PHYSICAL semantics ONLY. Protocol address lives in MappingProfile.",
+  "type": "object",
+  "required": ["id", "code", "semantic_type", "unit", "aggregation", "tags", "asset_id", "metadata"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "UUID v4 unique identifier"
+    },
+    "code": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "description": "Unique point code within asset scope"
+    },
+    "semantic_type": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Physical quantity type, UCUM/QUDT compatible (e.g., power, temperature, flow_rate)"
+    },
+    "unit": {
+      "type": "string",
+      "minLength": 1,
+      "description": "UCUM unit code (e.g., kW, degC, m3/h, Pa, A, V, Hz)"
+    },
+    "aggregation": {
+      "type": "array",
+      "description": "Supported aggregation functions",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "enum": ["latest", "min", "max", "avg", "sum", "count", "delta", "rate"]
+      }
+    },
+    "tags": {
+      "type": "array",
+      "description": "Semantic tags for classification and search",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "asset_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "FK to Asset.id"
+    },
+    "metadata": {
+      "type": "object",
+      "properties": {
+        "constraints": {
+          "type": "object",
+          "properties": {
+            "min": { "type": "number" },
+            "max": { "type": "number" }
+          }
+        },
+        "telemetry": {
+          "type": "object",
+          "properties": {
+            "sampling": {
+              "type": "object",
+              "properties": {
+                "interval": { "type": "string" },
+                "strategy": { "type": "string", "enum": ["report_on_change", "periodic", "event_triggered"] },
+                "deadband": { "type": "number" }
+              }
+            },
+            "historical": { "type": "boolean" }
+          }
+        },
+        "quality": {
+          "type": "string",
+          "enum": ["GOOD", "UNCERTAIN", "BAD"]
+        },
+        "availability": { "type": "boolean" }
+      }
+    }
+  },
+  "additionalProperties": false,
+  "patternProperties": {
+    "^(protocol|address|register|slave_id|function_code|topic|url|endpoint)$": {
+      "type": "string",
+      "description": "FORBIDDEN: Protocol fields must NOT exist in Point definition. Use MappingProfile instead."
+    }
+  }
+}

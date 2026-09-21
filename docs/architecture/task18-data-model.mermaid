@@ -1,0 +1,131 @@
+# Task 18 — Data Model ER Diagram
+
+```mermaid
+erDiagram
+    EDGE_NODE ||--|{ TENANT_MAPPING : "serves"
+    EDGE_NODE ||--|{ ADAPTER_CONFIG : "manages"
+    EDGE_NODE ||--|{ RULE : "executes"
+    EDGE_NODE ||--|{ OTA_PACKAGE : "receives"
+    EDGE_NODE ||--|{ SYNC_SESSION : "maintains"
+    
+    TENANT ||--|{ TENANT_MAPPING : "mapped"
+    TENANT ||--|{ ASSET : "owns"
+    ASSET ||--|{ DATAPOINT : "has"
+    DATAPOINT ||--|{ TELEMETRY_POINT : "generates"
+    
+    RULE ||--|{ RULE_EXECUTION : "triggers"
+    MODEL ||--|{ INFEREE_RESULT : "produces"
+    
+    EDGE_NODE {
+        string node_id PK
+        string tenant_id FK
+        string status
+        jsonb config
+        hlc_timestamp last_heartbeat
+        datetime created_at
+    }
+    
+    TENANT {
+        string tenant_id PK
+        string name
+        jsonb quota_config
+        datetime created_at
+    }
+    
+    TENANT_MAPPING {
+        int id PK
+        string tenant_id FK
+        string node_id FK
+        datetime mapped_at
+    }
+    
+    ADAPTER_CONFIG {
+        int id PK
+        string adapter_id
+        string type
+        jsonb config
+        string tenant_id FK
+        datetime created_at
+    }
+    
+    TELEMETRY_POINT {
+        int id PK
+        string asset_id FK
+        string property_code
+        timestamp timestamp
+        double value
+        string quality
+        string source_adapter
+        string tenant_id FK
+        hlc_timestamp hlc
+    }
+    
+    RULE {
+        string rule_id PK
+        string name
+        string expression
+        string tenant_id FK
+        boolean enabled
+        datetime created_at
+    }
+    
+    RULE_EXECUTION {
+        int id PK
+        string rule_id FK
+        string input_summary
+        string output_summary
+        float duration_ms
+        datetime executed_at
+    }
+    
+    OTA_PACKAGE {
+        string package_id PK
+        string version
+        string checksum_blake3
+        string signature_ed25519
+        int size_bytes
+        datetime uploaded_at
+    }
+    
+    SYNC_SESSION {
+        string session_id PK
+        string node_id FK
+        string cloud_node_id
+        hlc_timestamp last_sync_hlc
+        int pending_uploads
+        int pending_downloads
+        datetime created_at
+    }
+    
+    CONFLICT {
+        string conflict_id PK
+        string key
+        bytes cloud_value
+        bytes edge_value
+        hlc_timestamp cloud_hlc
+        hlc_timestamp edge_hlc
+        string resolution_strategy
+        string status
+    }
+```
+
+## Key Relationships
+
+1. **Edge Node ↔ Tenant**: One-to-many mapping (single node can serve multiple tenants)
+2. **Tenant ↔ Asset**: One-to-many (tenant owns multiple assets)
+3. **Asset ↔ DataPoint**: One-to-many (asset has multiple data points)
+4. **DataPoint ↔ TelemetryPoint**: One-to-many (historical values)
+5. **Rule ↔ RuleExecution**: One-to-many (rule triggers multiple executions)
+6. **Edge Node ↔ SyncSession**: One-to-one (single sync session per node)
+7. **Conflict**: Independent entity, linked via key to tenant/asset context
+
+## HLC Timestamp Pattern
+
+All sync-related tables use HLC timestamp for:
+- Causal ordering of events
+- Conflict resolution
+- Incremental sync cursors
+
+```
+HLC = (physical_ts, logical_counter, node_id)
+```

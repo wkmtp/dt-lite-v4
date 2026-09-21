@@ -1,0 +1,79 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://dt-lite.schemas/universal/composite-asset.json",
+  "title": "CompositeAsset",
+  "description": "Universal CompositeAsset Contract v1.0 — FROZEN. Tree+Graph composition engine for aggregated assets.",
+  "type": "object",
+  "required": ["id", "code", "name", "composition_tree", "capability_inheritance", "aggregation_rules"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "code": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^asset\\.(park|factory)\\.[a-z0-9]+\\.[a-z_][a-z0-9_]*$",
+      "description": "Must follow asset naming convention"
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1
+    },
+    "composition_tree": {
+      "type": "array",
+      "description": "Tree hierarchy of child assets with relationship types. Must be acyclic, single parent, depth ≤ 10.",
+      "items": {
+        "type": "object",
+        "required": ["ref", "type"],
+        "properties": {
+          "ref": {
+            "type": "string",
+            "format": "uuid",
+            "description": "FK to child Asset.id"
+          },
+          "type": {
+            "type": "string",
+            "enum": ["contains", "feeds", "controls", "monitors", "supplies", "depends_on"]
+          },
+          "depth": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 10
+          }
+        }
+      }
+    },
+    "capability_inheritance": {
+      "type": "array",
+      "description": "Capability codes inherited from child assets (LIFO override)",
+      "items": {
+        "type": "string"
+      }
+    },
+    "aggregation_rules": {
+      "type": "object",
+      "description": "KPI aggregation rules: key → function mapping",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["function"],
+        "properties": {
+          "function": {
+            "type": "string",
+            "enum": ["sum", "avg", "min", "max", "count", "latest", "weighted_avg", "custom_expr"]
+          },
+          "weight": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "expr": {
+            "type": "string",
+            "description": "Custom expression (only when function=custom_expr)"
+          }
+        }
+      }
+    }
+  },
+  "additionalProperties": false
+}

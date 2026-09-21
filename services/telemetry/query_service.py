@@ -5,7 +5,7 @@ All queries are scoped to the current tenant context — no cross-tenant access 
 """
 import logging
 from datetime import datetime
-from typing import Optional, Sequence
+from typing import Optional
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession

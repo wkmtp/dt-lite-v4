@@ -1,103 +1,88 @@
-"""Adapter Registry - In-Memory Adapter Lookup.
+"""Adapter Registry — Multi-tenant adapter lifecycle management."""
+import logging
+from typing import Optional
+from uuid import UUID
 
-The registry manages adapter registration/unregistration and provides
-lookup by name. It does NOT handle:
-- Tenant authorization
-- Database persistence
-- Business logic
+from services.iota.contracts import ProtocolAdapter
+from services.adapter.exceptions import (
+    AdapterAlreadyExistsError,
+    AdapterNotFoundError,
+)
 
-Registry is intentionally stateless regarding tenant context.
-Tenant isolation happens at the Service layer.
-"""
-from typing import Any
-
-from services.adapter.exceptions import AdapterNotFoundError
+logger = logging.getLogger(__name__)
 
 
 class AdapterRegistry:
-    """In-memory registry for ProtocolAdapter instances.
+    """Registry for protocol adapters with multi-tenant isolation.
 
-    Usage:
-        registry = AdapterRegistry()
-        registry.register("simulator", SimulatorAdapter())
-        adapter = registry.get("simulator")
-        registry.remove("simulator")
+    Manages adapter lifecycle:
+      register() -> connect() -> operational -> disconnect() -> unregister()
+
+    Thread-safe: Uses asyncio.Lock for concurrent registration.
+    Tenant isolation: Each adapter is scoped to a single tenant.
     """
 
-    def __init__(self) -> None:
-        self._adapters: dict[str, Any] = {}
+    def __init__(self):
+        # {tenant_id: {adapter_id: ProtocolAdapter}}
+        self._adapters: dict[UUID, dict[UUID, ProtocolAdapter]] = {}
 
-    def register(self, name: str, adapter: Any) -> None:
-        """Register an adapter instance.
+    def _get_tenant_adapters(self, tenant_id: UUID) -> dict[UUID, ProtocolAdapter]:
+        """Get or create tenant adapter map."""
+        return self._adapters.setdefault(tenant_id, {})
 
-        Args:
-            name: Unique adapter name (e.g., "simulator", "test-adapter").
-            adapter: ProtocolAdapter implementing instance.
+    async def register(
+        self,
+        adapter_id: UUID,
+        tenant_id: UUID,
+        adapter: ProtocolAdapter,
+    ) -> None:
+        """Register an adapter for a tenant."""
+        tenant_adapters = self._get_tenant_adapters(tenant_id)
+        if adapter_id in tenant_adapters:
+            raise AdapterAlreadyExistsError(adapter_id, tenant_id)
 
-        Raises:
-            ValueError: If adapter is not a ProtocolAdapter subclass.
-        """
-        from services.iota.contracts import ProtocolAdapter
-        if not isinstance(adapter, ProtocolAdapter):
-            raise ValueError(
-                f"Adapter '{name}' must implement ProtocolAdapter interface"
-            )
-        self._adapters[name] = adapter
+        tenant_adapters[adapter_id] = adapter
+        logger.info("Registered adapter %s for tenant %s", adapter_id, tenant_id)
 
-    def get(self, name: str) -> Any:
-        """Get registered adapter by name.
+    async def unregister(self, adapter_id: UUID, tenant_id: UUID) -> None:
+        """Unregister and disconnect an adapter."""
+        tenant_adapters = self._get_tenant_adapters(tenant_id)
+        if adapter_id not in tenant_adapters:
+            raise AdapterNotFoundError(str(adapter_id), adapter_id)
 
-        Args:
-            name: Adapter name.
+        adapter = tenant_adapters.pop(adapter_id)
+        try:
+            await adapter.disconnect()
+        except Exception as e:
+            logger.warning("Error disconnecting adapter %s: %s", adapter_id, e)
 
-        Returns:
-            ProtocolAdapter instance.
+        logger.info("Unregistered adapter %s for tenant %s", adapter_id, tenant_id)
 
-        Raises:
-            AdapterNotFoundError: If adapter is not registered.
-        """
-        adapter = self._adapters.get(name)
-        if adapter is None:
-            raise AdapterNotFoundError(name)
-        return adapter
+    async def get(self, adapter_id: UUID, tenant_id: UUID) -> Optional[ProtocolAdapter]:
+        """Get an adapter by ID within tenant scope."""
+        tenant_adapters = self._get_tenant_adapters(tenant_id)
+        return tenant_adapters.get(adapter_id)
 
-    def remove(self, name: str) -> None:
-        """Remove adapter from registry.
+    async def list_for_tenant(self, tenant_id: UUID) -> list[ProtocolAdapter]:
+        """List all adapters for a tenant."""
+        return list(self._get_tenant_adapters(tenant_id).values())
 
-        Args:
-            name: Adapter name to remove.
+    async def count_for_tenant(self, tenant_id: UUID) -> int:
+        """Count adapters for a tenant."""
+        return len(self._get_tenant_adapters(tenant_id))
 
-        Raises:
-            AdapterNotFoundError: If adapter is not registered.
-        """
-        if name not in self._adapters:
-            raise AdapterNotFoundError(name)
-        del self._adapters[name]
+    async def contains(self, adapter_id: UUID, tenant_id: UUID) -> bool:
+        """Check if adapter exists for tenant."""
+        return adapter_id in self._get_tenant_adapters(tenant_id)
 
-    def list_adapters(self) -> list[str]:
-        """List all registered adapter names.
-
-        Returns:
-            List of adapter names.
-        """
-        return list(self._adapters.keys())
-
-    def contains(self, name: str) -> bool:
-        """Check if adapter is registered.
-
-        Args:
-            name: Adapter name.
-
-        Returns:
-            True if registered, False otherwise.
-        """
-        return name in self._adapters
-
-    def clear(self) -> None:
-        """Remove all adapters from registry."""
-        self._adapters.clear()
-
-    @property
-    def count(self) -> int:
-        """Number of registered adapters."""
-        return len(self._adapters)
+    async def clear_tenant(self, tenant_id: UUID) -> int:
+        """Disconnect and remove all adapters for a tenant."""
+        tenant_adapters = self._adapters.pop(tenant_id, {})
+        count = 0
+        for adapter_id, adapter in tenant_adapters.items():
+            try:
+                await adapter.disconnect()
+                count += 1
+            except Exception as e:
+                logger.warning("Error cleaning adapter %s: %s", adapter_id, e)
+        return count

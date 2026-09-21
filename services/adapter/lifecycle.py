@@ -1,13 +1,9 @@
 """Adapter Lifecycle State Machine.
 
 Valid transitions:
-  CREATED ──connect──► CONNECTED ──start──► RUNNING
-                                                │
-                                                ▼
-  STOPPED ◄──stop── RUNNING ◄──disconnect── FAILED
-       │                              │
-       └───────reset──────────────────┘
-
+  CREATED ──connect──�?CONNECTED ──start──�?RUNNING
+                                                �?                                                �?  STOPPED ◄──stop── RUNNING ◄──disconnect── FAILED
+       �?                             �?       └───────reset──────────────────�?
 Transitions that are NOT allowed will raise AdapterLifecycleError.
 """
 from enum import Enum

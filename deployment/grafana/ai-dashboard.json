@@ -1,0 +1,125 @@
+{
+  "annotations": {
+    "list": []
+  },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "panels": [
+    {
+      "title": "Request Rate",
+      "type": "graph",
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
+      "targets": [{
+        "expr": "rate(ai_requests_total[1m])",
+        "legendFormat": "{{model}}",
+        "refId": "A"
+      }],
+      "yaxes": [{"label": "req/s", "format": "short"}]
+    },
+    {
+      "title": "P99 Latency",
+      "type": "graph",
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
+      "targets": [{
+        "expr": "histogram_quantile(0.99, rate(ai_request_duration_seconds_bucket[1m]))",
+        "legendFormat": "p99",
+        "refId": "A"
+      }],
+      "yaxes": [{"label": "seconds", "format": "s"}]
+    },
+    {
+      "title": "Token Consumption",
+      "type": "graph",
+      "gridPos": {"h": 8, "w": 8, "x": 0, "y": 8},
+      "targets": [{
+        "expr": "sum by (model) (rate(ai_tokens_total[1m]))",
+        "legendFormat": "{{model}}",
+        "refId": "A"
+      }],
+      "yaxes": [{"label": "tokens/s", "format": "short"}]
+    },
+    {
+      "title": "Cost per Tenant",
+      "type": "graph",
+      "gridPos": {"h": 8, "w": 8, "x": 8, "y": 8},
+      "targets": [{
+        "expr": "sum by (tenant_id) (rate(ai_cost_usd_total[1m]))",
+        "legendFormat": "{{tenant_id}}",
+        "refId": "A"
+      }],
+      "yaxes": [{"label": "USD/min", "format": "currency"}]
+    },
+    {
+      "title": "Error Rate",
+      "type": "graph",
+      "gridPos": {"h": 8, "w": 8, "x": 16, "y": 8},
+      "targets": [{
+        "expr": "rate(ai_errors_total[1m]) / (rate(ai_requests_total[1m]) + rate(ai_errors_total[1m])) * 100",
+        "legendFormat": "error %",
+        "refId": "A"
+      }],
+      "yaxes": [{"label": "%", "format": "percent"}]
+    },
+    {
+      "title": "Model Circuit Breaker Status",
+      "type": "stat",
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 16},
+      "targets": [{
+        "expr": "ai_circuit_breaker_state",
+        "legendFormat": "{{provider}}",
+        "refId": "A"
+      }],
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            {"options": {"0": {"color": "red", "text": "OPEN"}}, "type": "value"},
+            {"options": {"1": {"color": "yellow", "text": "HALF_OPEN"}}, "type": "value"},
+            {"options": {"2": {"color": "green", "text": "CLOSED"}}, "type": "value"}
+          ]
+        }
+      }
+    },
+    {
+      "title": "Tenant Quota Usage",
+      "type": "graph",
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 16},
+      "targets": [{
+        "expr": "ai_tenant_daily_spend_usd / ai_tenant_daily_budget_usd * 100",
+        "legendFormat": "{{tenant_id}}",
+        "refId": "A"
+      }],
+      "yaxes": [{"label": "% budget", "format": "percent"}],
+      "alerts": [{
+        "title": "Budget Exceeded",
+        "evaluator": {"params": [0.9], "type": "above"},
+        "conditions": [{"evaluator": {"params": [0.9], "type": "above"}, "operator": "AND", "query": {"params": ["A", "5m", "now"]}, "reducer": {"params": [], "type": "last"}, "type": "query"}],
+        "executionErrorState": "alerting",
+        "frequency": "60s",
+        "handler": 1,
+        "message": "Tenant daily budget exceeded 90%"
+      }]
+    }
+  ],
+  "refresh": "30s",
+  "schemaVersion": 38,
+  "style": "dark",
+  "tags": ["dt-lite", "ai"],
+  "templating": {
+    "list": [{
+      "current": {"selected": false, "text": "All", "value": "$__all"},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "definition": "label_values(ai_requests_total, model)",
+      "hide": 0, "includeAll": true, "label": "Model",
+      "multi": true, "name": "model", "options": [],
+      "query": {"query": "label_values(ai_requests_total, model)", "refId": "StandardVariableQuery"},
+      "refresh": 1, "regex": "", "skipUrlSync": false, "sort": 0, "type": "query"
+    }]
+  },
+  "time": {"from": "now-1h", "to": "now"},
+  "timepicker": {},
+  "timezone": "",
+  "title": "DT-Lite AI Service",
+  "uid": "dtlite-ai",
+  "version": 1
+}

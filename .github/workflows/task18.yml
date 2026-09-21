@@ -1,0 +1,92 @@
+name: Task 18 — Edge Computing CI
+
+on:
+  push:
+    branches:
+      - feat/task18-edge-computing
+      - main
+  pull_request:
+    branches:
+      - main
+      - feat/task18-edge-computing
+  workflow_dispatch:
+
+jobs:
+  lint:
+    name: Lint (Ruff)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install ruff==0.8.*
+      - run: ruff check services/edge services/sync tests/architecture/test_task18_architecture.py
+      - run: ruff format --check services/edge services/sync
+
+  typecheck:
+    name: Type Check (mypy)
+    runs-on: ubuntu-latest
+    needs: lint
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install -r requirements-edge.txt mypy==1.13.*
+      - run: mypy --strict services/edge services/sync
+
+  test:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    needs: lint
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install -r requirements-edge.txt
+      - run: pytest tests/edge/ tests/sync/ tests/architecture/test_task18_architecture.py -v --cov=services/edge --cov=services/sync --cov-fail-under=60
+
+  arch-test:
+    name: Architecture Redline Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install pytest
+      - run: pytest tests/architecture/test_task18_architecture.py -v
+
+  docker-build:
+    name: Docker Build
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -f deployment/edge/Dockerfile.edge -t dt-lite-edge:test .
+
+  trivy-scan:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    needs: docker-build
+    steps:
+      - uses: actions/checkout@v4
+      - uses: aquasecurity/trivy-action@master
+        with:
+          target: deployment/edge/Dockerfile.edge
+          severity: CRITICAL,HIGH
+          exit-code: 1
+
+  security-scan:
+    name: Python Security (bandit + pip-audit)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install bandit==1.8.* pip-audit==2.7.*
+      - run: bandit -r services/edge services/sync -ll
+      - run: pip-audit -r requirements-edge.txt

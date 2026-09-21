@@ -1,6 +1,0 @@
-# DT-Lite Telemetry Service
-dependencies:
-  - fastapi>=0.109.0
-  - sqlalchemy>=2.0.0
-  - asyncpg>=0.29.0
-  - timescaledb>=2.0.0

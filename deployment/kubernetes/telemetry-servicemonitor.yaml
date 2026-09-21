@@ -1,0 +1,20 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: telemetry
+  namespace: dtlite
+  labels:
+    app: telemetry
+    release: prometheus
+spec:
+  selector:
+    matchLabels:
+      app: telemetry
+  endpoints:
+    - port: metrics
+      interval: 15s
+      path: /metrics
+      scrapeTimeout: 10s
+  namespaceSelector:
+    matchNames:
+      - dtlite

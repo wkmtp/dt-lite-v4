@@ -1,0 +1,42 @@
+# Edge Node Dockerfile
+
+FROM python:3.11-slim AS builder
+
+WORKDIR /build
+COPY requirements-edge.txt .
+RUN pip install --no-cache-dir --prefix=/install -r requirements-edge.txt
+
+COPY services/edge /build/edge
+COPY services/sync /build/sync
+COPY services/adapter/edge /build/adapter-edge
+COPY packages/common /build/common
+COPY packages/schemas /build/schemas
+
+FROM python:3.11-slim AS runtime
+
+WORKDIR /app
+RUN apt-get update && apt-get install -y --no-install-recommends curl && rm -rf /var/lib/apt/lists/*
+
+COPY --from=builder /install /usr/local
+COPY --from=builder /build/edge /app/edge
+COPY --from=builder /build/sync /app/sync
+COPY --from=builder /build/adapter-edge /app/adapter-edge
+COPY --from=builder /build/common /app/common
+COPY --from=builder /build/schemas /app/schemas
+
+RUN groupadd -r dtlite && useradd -r -g dtlite dtlite
+USER dtlite
+
+EXPOSE 8080 9090
+
+ENV PYTHONUNBUFFERED=1
+ENV EDGE_NODE_ID=${EDGE_NODE_ID}
+ENV EDGE_PROVISIONING_TOKEN=${EDGE_PROVISIONING_TOKEN}
+ENV EDGE_CLOUD_URL=${EDGE_CLOUD_URL}
+ENV EDGE_CPU_LIMIT=${EDGE_CPU_LIMIT:-2}
+ENV EDGE_MEMORY_LIMIT=${EDGE_MEMORY_LIMIT:-2Gi}
+
+HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
+  CMD curl -f http://localhost:8080/health || exit 1
+
+CMD ["python", "-m", "services.edge.main"]

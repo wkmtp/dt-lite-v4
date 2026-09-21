@@ -9,7 +9,6 @@ from typing import Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from services.auth.dependencies import get_current_tenant, require_permission
 from services.database import AsyncSessionLocal

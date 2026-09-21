@@ -1,0 +1,27 @@
+name: Redline Check
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+  workflow_dispatch:
+
+jobs:
+  redline:
+    name: Architecture Redline Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      
+      - name: Run Redline Check
+        run: |
+          python scripts/cp2_redline_check.py
+        working-directory: dt-lite-v4

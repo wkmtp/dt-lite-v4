@@ -1,0 +1,140 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Edge Node Resource Quota",
+  "description": "Resource quota configuration for DT-Lite Edge Node",
+  "type": "object",
+  "required": ["node_id", "tenant_id", "cpu_limit", "memory_limit"],
+  "properties": {
+    "node_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Edge node unique identifier"
+    },
+    "tenant_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Tenant identifier"
+    },
+    "cpu_limit": {
+      "type": "number",
+      "minimum": 0.1,
+      "maximum": 16.0,
+      "description": "CPU core limit (e.g., 2.0 = 2 cores)"
+    },
+    "memory_limit": {
+      "type": "integer",
+      "minimum": 128000000,
+      "maximum": 32000000000,
+      "description": "Memory limit in bytes (min 128MB, max 32GB)"
+    },
+    "disk_limit": {
+      "type": "integer",
+      "minimum": 1000000000,
+      "maximum": 100000000000,
+      "description": "Disk limit in bytes (min 1GB, max 100GB)"
+    },
+    "network_rx_limit_mbps": {
+      "type": "number",
+      "minimum": 1,
+      "maximum": 10000,
+      "description": "Network receive limit in Mbps"
+    },
+    "network_tx_limit_mbps": {
+      "type": "number",
+      "minimum": 1,
+      "maximum": 10000,
+      "description": "Network transmit limit in Mbps"
+    },
+    "max_connections": {
+      "type": "integer",
+      "minimum": 10,
+      "maximum": 10000,
+      "description": "Max concurrent device connections"
+    },
+    "max_models": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 20,
+      "description": "Max concurrent ML models"
+    },
+    "gpu_limit_mb": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 8192,
+      "description": "GPU memory limit in MB (0 = no GPU)"
+    },
+    "alert_thresholds": {
+      "type": "object",
+      "properties": {
+        "cpu_warning_pct": {
+          "type": "number",
+          "default": 70,
+          "minimum": 50,
+          "maximum": 90
+        },
+        "cpu_critical_pct": {
+          "type": "number",
+          "default": 90,
+          "minimum": 80,
+          "maximum": 95
+        },
+        "memory_warning_pct": {
+          "type": "number",
+          "default": 75,
+          "minimum": 60,
+          "maximum": 90
+        },
+        "memory_critical_pct": {
+          "type": "number",
+          "default": 90,
+          "minimum": 80,
+          "maximum": 95
+        },
+        "disk_warning_pct": {
+          "type": "number",
+          "default": 80,
+          "minimum": 70,
+          "maximum": 90
+        },
+        "disk_critical_pct": {
+          "type": "number",
+          "default": 95,
+          "minimum": 90,
+          "maximum": 99
+        }
+      }
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Quota creation timestamp"
+    },
+    "updated_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Last quota update timestamp"
+    }
+  },
+  "examples": [
+    {
+      "node_id": "edge-node-001",
+      "tenant_id": "tenant-alpha",
+      "cpu_limit": 2.0,
+      "memory_limit": 2147483648,
+      "disk_limit": 10737418240,
+      "network_rx_limit_mbps": 100,
+      "network_tx_limit_mbps": 50,
+      "max_connections": 100,
+      "max_models": 3,
+      "gpu_limit_mb": 0,
+      "alert_thresholds": {
+        "cpu_warning_pct": 70,
+        "cpu_critical_pct": 90,
+        "memory_warning_pct": 75,
+        "memory_critical_pct": 90,
+        "disk_warning_pct": 80,
+        "disk_critical_pct": 95
+      }
+    }
+  ]
+}

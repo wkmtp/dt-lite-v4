@@ -1,0 +1,479 @@
+openapi: "3.1.0"
+info:
+  title: DT-Lite Telemetry Pipeline API
+  description: |
+    Telemetry ingestion, query, quality, and aggregation API for DT-Lite V4.0 Phase 2.
+    All endpoints require JWT authentication via the Gateway.
+  version: 1.0.0
+  contact:
+    name: DT-Lite Engineering
+  license:
+    name: Proprietary
+
+servers:
+  - url: http://localhost:8080
+    description: Local development
+  - url: https://api.dtlite.local
+    description: Production
+
+security:
+  - BearerAuth: []
+
+paths:
+  /api/v1/telemetry/ingest:
+    post:
+      summary: Batch ingest telemetry points
+      description: |
+        Ingest a batch of telemetry points. Each point must have a valid asset_id,
+        property_code, timestamp, value, and data_type. Quality defaults to GOOD.
+      operationId: ingestTelemetryPoints
+      tags:
+        - Telemetry Ingestion
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TelemetryIngestRequest"
+            example:
+              points:
+                - asset_id: "550e8400-e29b-41d4-a716-446655440000"
+                  property_code: "temperature"
+                  timestamp: "2026-09-07T12:00:00Z"
+                  value: 22.5
+                  data_type: "FLOAT"
+                  unit: "degC"
+                  quality: "GOOD"
+                  source_adapter: "bacnet"
+      responses:
+        "200":
+          description: Points ingested successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TelemetryIngestResponse"
+        "400":
+          description: Validation error
+        "401":
+          description: Unauthorized
+        "429":
+          description: Rate limited (backpressure)
+      security:
+        - BearerAuth: []
+
+  /api/v1/telemetry/query:
+    get:
+      summary: Query telemetry data with DSL
+      description: |
+        Query telemetry data using the TelemetryQuery DSL. Supports time range,
+        aggregation (avg/min/max/sum/count), and grouping by asset/property.
+      operationId: queryTelemetry
+      tags:
+        - Telemetry Query
+      parameters:
+        - name: asset_id
+          in: query
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Asset identifier
+        - name: property_code
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Property code (optional, all if omitted)
+        - name: start_time
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date-time
+          description: Start of time range
+        - name: end_time
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date-time
+          description: End of time range
+        - name: aggregate
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [none, avg, min, max, sum, count]
+            default: none
+          description: Aggregation function
+        - name: group_by
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [asset, property, both, none]
+            default: none
+          description: Group by dimension
+      responses:
+        "200":
+          description: Query results
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TelemetryQueryResponse"
+        "400":
+          description: Invalid query parameters
+        "401":
+          description: Unauthorized
+      security:
+        - BearerAuth: []
+
+  /api/v1/telemetry/quality/{datapoint_id}:
+    get:
+      summary: Get quality score for a data point
+      description: |
+        Retrieve the five-dimension quality score for a specific data point.
+        Scores are weighted averages of completeness, timeliness, validity,
+        consistency, and accuracy.
+      operationId: getQualityScore
+      tags:
+        - Telemetry Quality
+      parameters:
+        - name: datapoint_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Data point identifier
+      responses:
+        "200":
+          description: Quality score
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/QualityScoreResponse"
+        "404":
+          description: Data point not found
+        "401":
+          description: Unauthorized
+      security:
+        - BearerAuth: []
+
+  /api/v1/telemetry/aggregates:
+    post:
+      summary: Create continuous aggregate view
+      description: |
+        Create or update a continuous aggregate materialized view for
+        a given asset and aggregation level (1s, 1m, 1h, 1d).
+      operationId: createAggregate
+      tags:
+        - Telemetry Aggregation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AggregateRequest"
+      responses:
+        "200":
+          description: Aggregate created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AggregateResponse"
+        "400":
+          description: Invalid aggregate level
+        "401":
+          description: Unauthorized
+      security:
+        - BearerAuth: []
+
+  /api/v1/telemetry/config:
+    get:
+      summary: Get telemetry configuration
+      description: |
+        Retrieve current telemetry pipeline configuration including
+        retention policy, compression settings, and quality rules.
+      operationId: getTelemetryConfig
+      tags:
+        - Telemetry Config
+      responses:
+        "200":
+          description: Configuration
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TelemetryConfigResponse"
+        "401":
+          description: Unauthorized
+      security:
+        - BearerAuth: []
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    TelemetryPoint:
+      type: object
+      required:
+        - asset_id
+        - property_code
+        - timestamp
+        - value
+        - data_type
+      properties:
+        asset_id:
+          type: string
+          format: uuid
+          description: Asset identifier
+        property_code:
+          type: string
+          description: Property/measurement code
+        timestamp:
+          type: string
+          format: date-time
+          description: Event timestamp (ISO 8601)
+        value:
+          oneOf:
+            - type: number
+            - type: string
+            - type: boolean
+            - type: object
+          description: Measured value
+        data_type:
+          type: string
+          enum: [BOOLEAN, INTEGER, FLOAT, STRING, JSON]
+        unit:
+          type: string
+          description: Physical unit
+        quality:
+          type: string
+          enum: [GOOD, UNCERTAIN, BAD, UNKNOWN]
+          default: GOOD
+        source_adapter:
+          type: string
+          description: Protocol adapter name
+        metadata:
+          type: object
+          additionalProperties: true
+
+    TelemetryIngestRequest:
+      type: object
+      required:
+        - points
+      properties:
+        points:
+          type: array
+          items:
+            $ref: "#/components/schemas/TelemetryPoint"
+          minItems: 1
+          maxItems: 10000
+          description: Batch of telemetry points
+
+    TelemetryIngestResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        data:
+          type: object
+          properties:
+            total:
+              type: integer
+            accepted:
+              type: integer
+            rejected:
+              type: integer
+        error:
+          type: string
+
+    TelemetryQueryResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        data:
+          type: object
+          properties:
+            rows:
+              type: array
+              items:
+                type: object
+                properties:
+                  timestamp:
+                    type: string
+                    format: date-time
+                  asset_id:
+                    type: string
+                    format: uuid
+                  property_code:
+                    type: string
+                  value:
+                    oneOf:
+                      - type: number
+                      - type: string
+            total_rows:
+              type: integer
+            query:
+              $ref: "#/components/schemas/TelemetryQueryDSL"
+        error:
+          type: string
+
+    TelemetryQueryDSL:
+      type: object
+      properties:
+        asset_id:
+          type: string
+          format: uuid
+        property_code:
+          type: string
+        time_range:
+          type: object
+          properties:
+            start:
+              type: string
+              format: date-time
+            end:
+              type: string
+              format: date-time
+        aggregate:
+          type: string
+          enum: [none, avg, min, max, sum, count]
+        group_by:
+          type: string
+          enum: [asset, property, both, none]
+
+    QualityScoreResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        data:
+          type: object
+          properties:
+            datapoint_id:
+              type: string
+              format: uuid
+            overall_score:
+              type: number
+              format: float
+              description: Weighted average 0.0-1.0
+            quality_level:
+              type: string
+              enum: [GOOD, UNCERTAIN, BAD]
+            dimensions:
+              type: object
+              properties:
+                completeness:
+                  type: number
+                timeliness:
+                  type: number
+                validity:
+                  type: number
+                consistency:
+                  type: number
+                accuracy:
+                  type: number
+        error:
+          type: string
+
+    AggregateRequest:
+      type: object
+      required:
+        - asset_id
+        - level
+      properties:
+        asset_id:
+          type: string
+          format: uuid
+        level:
+          type: string
+          enum: [1s, 1m, 1h, 1d]
+          description: Aggregation window
+        properties:
+          type: array
+          items:
+            type: string
+          description: Property codes to aggregate
+
+    AggregateResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        data:
+          type: object
+          properties:
+            view_name:
+              type: string
+            level:
+              type: string
+            sql:
+              type: string
+              description: Generated CREATE MATERIALIZED VIEW SQL
+        error:
+          type: string
+
+    TelemetryConfigResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        data:
+          type: object
+          properties:
+            retention:
+              $ref: "#/components/schemas/RetentionConfig"
+            compression:
+              $ref: "#/components/schemas/CompressionConfig"
+            quality_rules:
+              type: array
+              items:
+                type: object
+            batch_config:
+              $ref: "#/components/schemas/BatchConfig"
+        error:
+          type: string
+
+    RetentionConfig:
+      type: object
+      properties:
+        raw_retention_days:
+          type: integer
+          default: 30
+        agg_1s_retention_days:
+          type: integer
+          default: 7
+        agg_1m_retention_days:
+          type: integer
+          default: 90
+        agg_1h_retention_days:
+          type: integer
+          default: 365
+
+    CompressionConfig:
+      type: object
+      properties:
+        enabled:
+          type: boolean
+        segment_size:
+          type: string
+          description: TimescaleDB chunk interval
+
+    BatchConfig:
+      type: object
+      properties:
+        max_batch_size:
+          type: integer
+          default: 10000
+        flush_interval_ms:
+          type: integer
+          default: 10
+        max_pending_batches:
+          type: integer
+          default: 10

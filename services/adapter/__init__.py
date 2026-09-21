@@ -1,73 +1,53 @@
-"""Adapter Runtime Layer - DT-Lite V4.0
+"""Adapter Layer — Protocol-Independent Adapter Runtime.
 
-This module provides the Adapter Runtime Foundation:
-- ProtocolAdapter contract (re-exported from iota.contracts)
-- AdapterRegistry for runtime adapter management
-- AdapterRuntime for lifecycle coordination
-- Lifecycle state machine (CREATED → CONNECTED → RUNNING → STOPPED)
-- Health monitoring
-- SimulatorAdapter for validation
+This module provides the infrastructure for protocol adapters to connect
+physical devices to the DT-Lite digital twin platform.
 
-Security boundaries:
-- Adapter Runtime has NO direct database access
-- Adapter Runtime has NO tenant authority
-- Adapter Runtime produces NormalizedTelemetry only
-- Service layer bridges Adapter Runtime → IOTA persistence
+Architecture:
+  Device (iota) -> Adapter -> NormalizedTelemetry -> TelemetryService (Task 7)
+  TwinCommand -> Adapter -> Physical Device
 
-Protocol independence:
-- Zero protocol coupling (no BACnet, Modbus, OPC UA, MQTT in domain code)
-- All adapters implement ProtocolAdapter ABC
-- Real protocol adapters belong in plugins/protocol/ directory
+Frozen boundary:
+  - MUST NOT import services.telemetry directly
+  - MUST NOT import services.adapter sub-modules (no recursive imports)
+  - MUST use TenantAwareRepository for all database access
 """
 from services.iota.contracts import (
-    AdapterCapability,
-    DataQuality,
-    DataType,
-    DiscoveryResult,
-    NormalizedTelemetry,
     ProtocolAdapter,
+    AdapterCapability,
+    NormalizedTelemetry,
+    DiscoveryResult,
+    DataType,
+    AccessMode,
+    SamplingMode,
+    DataQuality,
     SecretProvider,
 )
 from services.adapter.exceptions import (
-    AdapterConnectionError,
     AdapterError,
-    AdapterLifecycleError,
+    AdapterConnectionError,
+    AdapterProtocolError,
     AdapterNotFoundError,
-    AdapterCapabilityError,
+    AdapterAlreadyExistsError,
+    AdapterNotConnectedError,
+    AdapterCapabilityMismatchError,
 )
-from services.adapter.registry import AdapterRegistry
-from services.adapter.runtime import AdapterRuntime
-from services.adapter.health import AdapterHealth, HealthMonitor
-from services.adapter.lifecycle import AdapterLifecycle, LifecycleState
-from services.adapter.simulator import SimulatorAdapter
-from services.adapter.models import AdapterInstance
 
 __all__ = [
-    # Contracts (re-exported)
     "ProtocolAdapter",
-    "SecretProvider",
     "AdapterCapability",
-    "DataType",
-    "DataQuality",
-    "DiscoveryResult",
     "NormalizedTelemetry",
-    # Exceptions
+    "DiscoveryResult",
+    "DataType",
+    "AccessMode",
+    "SamplingMode",
+    "DataQuality",
+    "SecretProvider",
     "AdapterError",
     "AdapterConnectionError",
-    "AdapterLifecycleError",
+    "AdapterProtocolError",
     "AdapterNotFoundError",
-    "AdapterCapabilityError",
-    # Registry & Runtime
-    "AdapterRegistry",
-    "AdapterRuntime",
-    # Lifecycle
-    "AdapterLifecycle",
-    "LifecycleState",
-    # Health
-    "AdapterHealth",
-    "HealthMonitor",
-    # Simulator
-    "SimulatorAdapter",
-    # Models
-    "AdapterInstance",
+    "AdapterAlreadyExistsError",
+    "AdapterNotConnectedError",
+    "AdapterCapabilityMismatchError",
 ]

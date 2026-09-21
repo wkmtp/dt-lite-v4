@@ -1,0 +1,20 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ai-config
+  namespace: dtlite
+  labels:
+    app: ai
+data:
+  AI_OPENAI_API_BASE: "https://api.openai.com/v1"
+  AI_OPENAI_MODEL: "gpt-4o"
+  AI_EMBEDDING_MODEL: "text-embedding-3-large"
+  AI_RAG_TOP_K: "10"
+  AI_RAG_RERANK_TOP_K: "5"
+  AI_AGENT_MAX_ITERATIONS: "10"
+  AI_AGENT_STREAMING_ENABLED: "true"
+  AI_DEFAULT_RPM_LIMIT: "60"
+  AI_DEFAULT_TPM_LIMIT: "100000"
+  AI_CIRCUIT_BREAKER_THRESHOLD: "5"
+  AI_CIRCUIT_BREAKER_TIMEOUT_SECONDS: "30"
+  VECTOR_STORE_BACKEND: "pgvector"

@@ -13,7 +13,6 @@ Security:
 """
 import logging
 from datetime import datetime, timezone
-from typing import Optional
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -21,7 +20,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from services.iota.contracts import NormalizedTelemetry
 from services.iota.repositories.device_repository import DeviceRepository
 from services.iota.repositories.data_point_repository import DataPointRepository
-from services.iota.repositories.connection_repository import ConnectionRepository
 from services.telemetry.exceptions import (
     TelemetryDeviceNotFoundError,
     TelemetryTenantMismatchError,
@@ -29,7 +27,6 @@ from services.telemetry.exceptions import (
 )
 from services.telemetry.models import TelemetryPoint
 from services.telemetry.repositories import TelemetryRepository
-from services.tenant_context import get_tenant_id
 
 logger = logging.getLogger(__name__)
 

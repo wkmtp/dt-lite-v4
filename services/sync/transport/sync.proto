@@ -1,0 +1,218 @@
+// Protocol Buffers v3 — Sync Engine Message Definitions
+// DT-Lite Edge Computing Sync Protocol
+
+syntax = "proto3";
+
+package dtlite.edge.sync;
+
+option go_package = "github.com/dt-lite/dt-lite-v4/proto/edge/sync";
+option java_package = "com.dtlite.edge.sync";
+option java_outer_classname = "SyncProto";
+
+// =============================================================================
+// HLC (Hybrid Logical Clock)
+// =============================================================================
+
+message HLCTimestamp {
+  int64 physical_ts = 1;      // Nanoseconds since epoch
+  int32 logical_counter = 2;  // Logical clock counter
+  string node_id = 3;         // Originating node ID
+}
+
+// =============================================================================
+// Telemetry
+// =============================================================================
+
+message TelemetryPoint {
+  string asset_id = 1;
+  string property_code = 10;
+  string timestamp = 2;       // ISO-8601
+  double value = 3;
+  string data_type = 4;       // INT32, FLOAT, BOOLEAN, STRING
+  string unit = 5;
+  string quality = 6;         // GOOD, UNCERTAIN, BAD
+  string source_adapter = 7;
+  map<string, string> metadata = 8;
+  HLCTimestamp hlc = 9;
+}
+
+message TelemetryBatch {
+  repeated TelemetryPoint points = 1;
+  string tenant_id = 2;
+  HLCTimestamp sync_hlc = 3;
+}
+
+// =============================================================================
+// Commands
+// =============================================================================
+
+message Command {
+  string command_id = 1;
+  string target_asset_id = 2;
+  string command_type = 3;    // SET_PROPERTY, RESTART, CALIBRATE
+  map<string, string> parameters = 4;
+  HLCTimestamp created_at = 5;
+  string tenant_id = 6;
+}
+
+message CommandBatch {
+  repeated Command commands = 1;
+  HLCTimestamp sync_hlc = 2;
+}
+
+// =============================================================================
+// Configuration
+// =============================================================================
+
+message ConfigDelta {
+  string config_key = 1;
+  bytes config_value = 2;
+  HLCTimestamp updated_at = 3;
+  string updated_by = 4;
+}
+
+message ConfigSync {
+  string node_id = 1;
+  string config_version = 2;
+  repeated ConfigDelta deltas = 3;
+  HLCTimestamp sync_hlc = 4;
+}
+
+// =============================================================================
+// Conflicts
+// =============================================================================
+
+message Conflict {
+  string conflict_id = 1;
+  string key = 2;
+  bytes cloud_value = 3;
+  bytes edge_value = 4;
+  HLCTimestamp cloud_hlc = 5;
+  HLCTimestamp edge_hlc = 6;
+  string resolution_strategy = 7;  // lww, merge, manual
+  string status = 8;               // PENDING, RESOLVED
+}
+
+// =============================================================================
+// OTA
+// =============================================================================
+
+message OTAPackage {
+  string package_id = 1;
+  string version = 2;
+  string checksum_blake3 = 3;
+  string signature_ed25519 = 4;
+  int64 size_bytes = 5;
+  string changelog = 6;
+  repeated string artifacts = 7;  // File paths in package
+}
+
+message OTAResponse {
+  string package_id = 1;
+  string status = 2;  // DOWNLOADING, VERIFYING, INSTALLING, SUCCESS, FAILURE
+  string error_message = 3;
+  HLCTimestamp updated_at = 4;
+}
+
+// =============================================================================
+// Heartbeat
+// =============================================================================
+
+message HeartbeatRequest {
+  string node_id = 1;
+  string status = 2;  // RUNNING, DEGRADED, ERROR
+  ResourceUsage resources = 3;
+  HLCTimestamp timestamp = 4;
+}
+
+message ResourceUsage {
+  double cpu_percent = 1;
+  int64 memory_bytes = 2;
+  int64 disk_bytes = 3;
+  int64 network_rx_bytes = 4;
+  int64 network_tx_bytes = 5;
+}
+
+message HeartbeatResponse {
+  bool ack = 1;
+  int32 next_heartbeat_ms = 2;
+  string config_version = 3;
+  HLCTimestamp server_hlc = 4;
+}
+
+// =============================================================================
+// Sync Messages (WebSocket frame payload)
+// =============================================================================
+
+enum MessageType {
+  UNKNOWN = 0;
+  // Upload
+  TELEMETRY_BATCH = 1;
+  // Download
+  COMMAND_BATCH = 2;
+  CONFIG_SYNC = 3;
+  // Control
+  HEARTBEAT = 4;
+  HEARTBEAT_ACK = 5;
+  // Conflict
+  CONFLICT_REPORT = 6;
+  CONFLICT_RESOLVE = 7;
+  // OTA
+  OTA_CHECK = 8;
+  OTA_DOWNLOAD = 9;
+  OTA_RESPONSE = 10;
+  // Error
+  ERROR = 99;
+}
+
+message SyncMessage {
+  MessageType type = 1;
+  oneof payload {
+    TelemetryBatch telemetry = 2;
+    CommandBatch commands = 3;
+    ConfigSync config = 4;
+    HeartbeatRequest heartbeat = 5;
+    HeartbeatResponse heartbeat_ack = 6;
+    Conflict conflict = 7;
+    OTAPackage ota_package = 8;
+    OTAResponse ota_response = 9;
+  }
+  string request_id = 10;
+  HLCTimestamp timestamp = 11;
+}
+
+// =============================================================================
+// Error
+// =============================================================================
+
+enum ErrorCode {
+  ERR_NONE = 0;
+  ERR_INVALID_TOKEN = 1;
+  ERR_PROVISION_FAILED = 2;
+  ERR_SYNC_CONFLICT = 3;
+  ERR_OTA_VERIFY_FAILED = 4;
+  ERR_QUOTA_EXCEEDED = 5;
+  ERR_INVALID_MESSAGE = 6;
+  ERR_INTERNAL = 99;
+}
+
+message ErrorMessage {
+  ErrorCode code = 1;
+  string message = 2;
+  string request_id = 3;
+}
+
+// =============================================================================
+// Service Definition
+// =============================================================================
+
+service SyncService {
+  // Bidirectional streaming for sync
+  rpc Sync(stream SyncMessage) returns (stream SyncMessage);
+
+  // Unary for OTA check
+  rpc CheckOTA(HeartbeatRequest) returns (OTAPackage);
+
+  // Unary for config fetch
+  rpc GetConfig(ConfigSync) returns (ConfigSync);
+}

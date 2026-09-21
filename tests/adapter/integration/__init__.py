@@ -1,0 +1,1 @@
+"""Adapter integration test package."""

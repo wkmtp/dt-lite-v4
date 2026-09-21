@@ -1,99 +1,105 @@
-"""Adapter Health Monitoring.
-
-Provides health status reporting without auto-recovery or scheduling.
-Health checks are triggered on-demand or via explicit calls.
-"""
-from dataclasses import dataclass, field
+"""Adapter health monitoring and metrics."""
+import logging
 from datetime import datetime, timezone
 from typing import Any, Optional
+from uuid import UUID
+
+from services.iota.contracts import ProtocolAdapter
+
+logger = logging.getLogger(__name__)
 
 
-@dataclass
-class AdapterHealth:
-    """Health status for a single adapter instance."""
+class AdapterHealthStatus:
+    """Health status for an adapter instance."""
 
-    adapter_name: str
-    status: str  # "HEALTHY", "UNHEALTHY", "UNKNOWN", "ERROR"
-    last_check_time: datetime
-    message: str
-    metadata: dict[str, Any] = field(default_factory=dict)
+    def __init__(
+        self,
+        adapter_id: UUID,
+        tenant_id: UUID,
+        adapter_type: str,
+        endpoint: str,
+        connected: bool,
+        circuit_state: str,
+        last_health_check: Optional[datetime] = None,
+        error_message: Optional[str] = None,
+        metrics: Optional[dict[str, Any]] = None,
+    ):
+        self.adapter_id = adapter_id
+        self.tenant_id = tenant_id
+        self.adapter_type = adapter_type
+        self.endpoint = endpoint
+        self.connected = connected
+        self.circuit_state = circuit_state
+        self.last_health_check = last_health_check
+        self.error_message = error_message
+        self.metrics = metrics or {}
 
     def to_dict(self) -> dict[str, Any]:
-        """Serialize health report."""
         return {
-            "adapter_name": self.adapter_name,
-            "status": self.status,
-            "last_check_time": self.last_check_time.isoformat(),
-            "message": self.message,
-            "metadata": self.metadata,
+            "adapter_id": str(self.adapter_id),
+            "tenant_id": str(self.tenant_id),
+            "adapter_type": self.adapter_type,
+            "endpoint": self.endpoint,
+            "connected": self.connected,
+            "circuit_state": self.circuit_state,
+            "last_health_check": (
+                self.last_health_check.isoformat()
+                if self.last_health_check else None
+            ),
+            "error_message": self.error_message,
+            "metrics": self.metrics,
         }
 
 
-class HealthMonitor:
-    """Monitors adapter health via explicit check calls.
+class AdapterHealthChecker:
+    """Performs health checks on adapters and tracks metrics."""
 
-    Does NOT implement:
-    - Automatic periodic checking
-    - Auto-recovery
-    - Alerting
-    - Scheduling
+    def __init__(self):
+        self._statuses: dict[tuple[UUID, UUID], AdapterHealthStatus] = {}
 
-    Health is determined by calling adapter.health() and mapping result.
-    """
-
-    def __init__(self) -> None:
-        self._health_cache: dict[str, AdapterHealth] = {}
-
-    async def check(self, adapter_name: str, adapter: Any) -> AdapterHealth:
-        """Perform health check on adapter.
-
-        Args:
-            adapter_name: Name of the adapter to check.
-            adapter: ProtocolAdapter instance.
-
-        Returns:
-            AdapterHealth with current status.
-        """
-        check_time = datetime.now(timezone.utc)
-
+    async def check(
+        self,
+        adapter_id: UUID,
+        tenant_id: UUID,
+        adapter: ProtocolAdapter,
+        adapter_type: str,
+        endpoint: str,
+        circuit_state: str,
+    ) -> AdapterHealthStatus:
         try:
-            is_healthy = await adapter.health()
-            if is_healthy:
-                status = "HEALTHY"
-                message = "Adapter is operational"
-            else:
-                status = "UNHEALTHY"
-                message = "Adapter health check returned False"
-
-            health = AdapterHealth(
-                adapter_name=adapter_name,
-                status=status,
-                last_check_time=check_time,
-                message=message,
+            healthy = await adapter.health()
+            now = datetime.now(timezone.utc)
+            status = AdapterHealthStatus(
+                adapter_id=adapter_id,
+                tenant_id=tenant_id,
+                adapter_type=adapter_type,
+                endpoint=endpoint,
+                connected=healthy,
+                circuit_state=circuit_state,
+                last_health_check=now,
+                error_message=None if healthy else "Health check returned False",
+                metrics={"last_check_at": now.isoformat()},
             )
-
         except Exception as e:
-            status = "ERROR"
-            message = f"Health check failed: {type(e).__name__}"
-            health = AdapterHealth(
-                adapter_name=adapter_name,
-                status=status,
-                last_check_time=check_time,
-                message=message,
-                metadata={"error_type": type(e).__name__},
+            now = datetime.now(timezone.utc)
+            status = AdapterHealthStatus(
+                adapter_id=adapter_id,
+                tenant_id=tenant_id,
+                adapter_type=adapter_type,
+                endpoint=endpoint,
+                connected=False,
+                circuit_state=circuit_state,
+                last_health_check=now,
+                error_message=str(e),
+                metrics={"last_check_at": now.isoformat(), "error": str(e)},
             )
 
-        self._health_cache[adapter_name] = health
-        return health
+        key = (adapter_id, tenant_id)
+        self._statuses[key] = status
+        return status
 
-    def get_health(self, adapter_name: str) -> Optional[AdapterHealth]:
-        """Get cached health status for adapter."""
-        return self._health_cache.get(adapter_name)
+    def get_status(self, adapter_id: UUID, tenant_id: UUID) -> Optional[AdapterHealthStatus]:
+        return self._statuses.get((adapter_id, tenant_id))
 
-    def get_all_health(self) -> dict[str, AdapterHealth]:
-        """Get all cached health statuses."""
-        return dict(self._health_cache)
-
-    def clear_cache(self) -> None:
-        """Clear health cache."""
-        self._health_cache.clear()
+    def list_statuses(self, tenant_id: UUID) -> list[AdapterHealthStatus]:
+        return [s for (aid, tid), s in self._statuses.items() if tid == tenant_id]

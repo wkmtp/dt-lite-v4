@@ -61,6 +61,8 @@ from services.template.routes import router as template_router
 from services.ontology.routes import router as ontology_router
 from services.deployment.routes import router as deployment_router
 from services.provisioning.routes import router as provisioning_router
+from services.activation.routes import router as activation_router
+from services.adapter.routes import router as adapter_router
 
 app.include_router(auth_router)
 app.include_router(core_router)
@@ -71,6 +73,8 @@ app.include_router(template_router)
 app.include_router(ontology_router)
 app.include_router(deployment_router)
 app.include_router(provisioning_router)
+app.include_router(activation_router)
+app.include_router(adapter_router)
 
 
 @app.on_event("startup")

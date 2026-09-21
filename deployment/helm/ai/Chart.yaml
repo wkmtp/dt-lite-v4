@@ -1,0 +1,37 @@
+# Helm Chart for DT-Lite AI Service
+apiVersion: v2
+name: dt-lite-ai
+description: AI Agent, RAG, Orchestrator & Model Gateway for DT-Lite
+type: application
+version: 4.0.0
+appVersion: "4.0.0"
+keywords:
+  - ai
+  - agent
+  - rag
+  - orchestration
+  - digital-twin
+maintainers:
+  - name: DT-Lite Team
+    email: dev@dt-lite.local
+sources:
+  - https://github.com/dt-lite/dt-lite-v4
+dependencies:
+  - name: postgresql
+    version: 15.x
+    repository: https://charts.bitnami.com/bitnami
+    condition: postgresql.enabled
+  - name: redis
+    version: 17.x
+    repository: https://charts.bitnami.com/bitnami
+    condition: redis.enabled
+  - name: prometheus
+    version: 25.x
+    repository: https://prometheus-community.github.io/helm-charts
+    condition: prometheus.enabled
+keywords:
+  - dt-lite
+  - ai
+  - agent
+  - rag
+  - digital-twin

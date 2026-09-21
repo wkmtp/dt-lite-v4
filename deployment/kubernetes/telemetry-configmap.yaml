@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: telemetry-config
+  namespace: dtlite
+  labels:
+    app: telemetry
+    stage: ${ENV_STAGE:-prod}
+data:
+  DATABASE_URL: "postgresql+asyncpg://${DB_USER:-dtlite}:${DB_PASSWORD}@${DB_HOST:-postgres}:${DB_PORT:-5432}/${DB_NAME:-dtlite_telemetry}"
+  REDIS_URL: "redis://${REDIS_HOST:-redis}:${REDIS_PORT:-6379}/0"
+  BATCH_MAX_SIZE: "10000"
+  BATCH_FLUSH_MS: "10"
+  MAX_PENDING_BATCHES: "10"
+  COMPRESSION_ALGO: "lz4"
+  QUALITY_CHECK_ENABLED: "true"
+  LOG_LEVEL: "info"

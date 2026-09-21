@@ -1,0 +1,114 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://dt-lite.schemas/universal/asset.json",
+  "title": "Asset",
+  "description": "Universal Asset Contract v1.0 — FROZEN. Represents a digital twin asset in the platform.",
+  "type": "object",
+  "required": ["id", "code", "name", "category", "attributes", "capabilities", "relationships", "model_bindings", "metadata"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "description": "UUID v4 unique identifier",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+      "example": "550e8400-e29b-41d4-a716-446655440000"
+    },
+    "code": {
+      "type": "string",
+      "description": "Human-readable code, must follow naming convention asset.<domain>.<sub_domain>.<type>",
+      "pattern": "^asset\\.(park|factory)\\.[a-z0-9]+\\.[a-z_][a-z0-9_]*$",
+      "example": "asset.park.facility.ahu"
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256,
+      "description": "Display name for the asset"
+    },
+    "category": {
+      "type": "string",
+      "description": "Asset category for classification",
+      "enum": [
+        "building", "facility", "energy", "water", "security",
+        "transport", "environment", "production", "fire", "elevator",
+        "access", "parking", "waste", "green", "it"
+      ]
+    },
+    "attributes": {
+      "type": "object",
+      "description": "Free-form metadata attributes",
+      "additionalProperties": true
+    },
+    "capabilities": {
+      "type": "array",
+      "description": "List of capability codes this asset supports",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "relationships": {
+      "type": "array",
+      "description": "List of relationship IDs linked to this asset",
+      "items": {
+        "type": "string",
+        "format": "uuid"
+      }
+    },
+    "model_bindings": {
+      "type": "array",
+      "description": "BIM/GIS/3D model bindings — reference only, never cascade delete",
+      "items": {
+        "type": "object",
+        "required": ["source", "source_id"],
+        "properties": {
+          "source": {
+            "type": "string",
+            "enum": ["bim", "gis", "3d"]
+          },
+          "source_id": {
+            "type": "string",
+            "description": "External model element ID (IFC GUID, GeoJSON ID, glTF node ID)"
+          },
+          "transform": {
+            "type": "object",
+            "description": "4x4 transformation matrix as flat array [16 floats]"
+          },
+          "lod": {
+            "type": "integer",
+            "minimum": 100,
+            "maximum": 500,
+            "description": "Level of detail: 100 (conceptual) to 500 (as-built)"
+          }
+        }
+      }
+    },
+    "metadata": {
+      "type": "object",
+      "required": ["tenant_id", "created_at"],
+      "properties": {
+        "tenant_id": {
+          "type": "string",
+          "description": "Multi-tenant isolation key"
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updated_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "lifecycle": {
+          "type": "object",
+          "properties": {
+            "status": {
+              "type": "string",
+              "enum": ["provisioned", "active", "decommissioned", "retired"]
+            }
+          }
+        }
+      }
+    }
+  },
+  "additionalProperties": false
+}

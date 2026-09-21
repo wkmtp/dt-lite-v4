@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://dt-lite.schemas/universal/relationship.json",
+  "title": "Relationship",
+  "description": "Universal Relationship Contract v1.0 — FROZEN. Directed, typed links between assets.",
+  "type": "object",
+  "required": ["id", "source_id", "target_id", "type", "direction", "metadata"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "source_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "FK to Asset.id (source)"
+    },
+    "target_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "FK to Asset.id (target)"
+    },
+    "type": {
+      "type": "string",
+      "description": "Relationship type",
+      "enum": ["contains", "feeds", "controls", "monitors", "supplies", "depends_on"]
+    },
+    "direction": {
+      "type": "string",
+      "description": "Graph direction",
+      "enum": ["directed", "bidirectional"]
+    },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": false
+}

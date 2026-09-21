@@ -1,0 +1,63 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://dt-lite.schemas/universal/capability.json",
+  "title": "Capability",
+  "description": "Universal Capability Contract v1.0 — FROZEN. Defines WHAT a capability does, NOT HOW. Algorithm/logic belongs in CapabilityPlugin.",
+  "type": "object",
+  "required": ["id", "code", "category", "input_schema", "output_schema", "safety_level", "preconditions", "postconditions", "idempotency_key"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "code": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "description": "Unique capability code (e.g., capability.hvac.set_temperature)"
+    },
+    "category": {
+      "type": "string",
+      "description": "Capability domain category"
+    },
+    "input_schema": {
+      "type": "object",
+      "description": "JSON Schema defining valid input parameters",
+      "$ref": "https://json-schema.org/draft/2020-12/schema"
+    },
+    "output_schema": {
+      "type": "object",
+      "description": "JSON Schema defining output structure"
+    },
+    "safety_level": {
+      "type": "string",
+      "description": "Safety classification: C0=observe, C1=adjust, C2=command, C3=override, C4=interlock",
+      "enum": ["C0", "C1", "C2", "C3", "C4"]
+    },
+    "preconditions": {
+      "type": "array",
+      "description": "JSONLogic expressions that must be true before execution",
+      "items": {
+        "type": "object"
+      }
+    },
+    "postconditions": {
+      "type": "array",
+      "description": "JSONLogic expressions that must be true after execution",
+      "items": {
+        "type": "object"
+      }
+    },
+    "idempotency_key": {
+      "type": "string",
+      "description": "Template for idempotency key: sha256(capability_code + input_params + timestamp_window)"
+    }
+  },
+  "additionalProperties": false,
+  "patternProperties": {
+    "^(algorithm|logic|implementation|code|script)$": {
+      "type": "string",
+      "description": "FORBIDDEN: Algorithm/logic must NOT exist in CapabilityContract. Use CapabilityPlugin instead."
+    }
+  }
+}

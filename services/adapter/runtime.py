@@ -1,305 +1,128 @@
-"""Adapter Runtime - Lifecycle Coordination Layer.
-
-The runtime manages adapter instances through their lifecycle:
-  create → connect → start → running → stop → disconnect
-
-It does NOT handle:
-- Data persistence (IOTA services do that)
-- Tenant authorization (Service layer does that)
-- Protocol-specific logic (each adapter implements that)
-
-The runtime coordinates between the registry, lifecycle state machine,
-and health monitor to provide a unified interface for adapter management.
-"""
+"""Adapter Runtime — Connection pooling, retry, circuit breaker."""
+import asyncio
 import logging
-from typing import Any, Optional
+from datetime import datetime, timezone
+from typing import Optional
 
-from services.adapter.exceptions import (
-    AdapterCapabilityError,
-    AdapterNotFoundError,
-)
-from services.adapter.health import HealthMonitor
-from services.adapter.lifecycle import AdapterLifecycle
-from services.adapter.models import AdapterInstance
-from services.iota.contracts import AdapterCapability, DiscoveryResult, NormalizedTelemetry
+from services.iota.contracts import ProtocolAdapter
+from services.adapter.exceptions import AdapterConnectionError
 
 logger = logging.getLogger(__name__)
 
+# Circuit breaker states
+STATE_CLOSED = "closed"
+STATE_OPEN = "open"
+STATE_HALF_OPEN = "half_open"
 
-class AdapterRuntime:
-    """Coordinates adapter lifecycle, health, and discovery operations.
 
-    This class is the primary interface for managing adapter instances
-    at runtime. It maintains AdapterInstance metadata and enforces
-    lifecycle state transitions.
-    """
+class CircuitBreaker:
+    """Simple circuit breaker for adapter connections."""
 
-    def __init__(self, registry: Any):
-        """Initialize runtime with adapter registry.
-
-        Args:
-            registry: AdapterRegistry instance.
-        """
-        self._registry = registry
-        self._instances: dict[str, AdapterInstance] = {}
-        self._lifecycles: dict[str, AdapterLifecycle] = {}
-        self._health_monitor = HealthMonitor()
+    def __init__(self, max_failures: int = 5, reset_timeout: float = 30.0):
+        self._max_failures = max_failures
+        self._reset_timeout = reset_timeout
+        self._state = STATE_CLOSED
+        self._failure_count = 0
+        self._last_failure_time: Optional[datetime] = None
+        self._lock = asyncio.Lock()
 
     @property
-    def health_monitor(self) -> HealthMonitor:
-        return self._health_monitor
+    def state(self) -> str:
+        if self._state == STATE_OPEN and self._last_failure_time:
+            elapsed = (datetime.now(timezone.utc) - self._last_failure_time).total_seconds()
+            if elapsed >= self._reset_timeout:
+                return STATE_HALF_OPEN
+        return self._state
 
-    async def create(self, name: str, config: Optional[dict] = None) -> None:
-        """Create (initialize) an adapter instance.
+    async def record_success(self) -> None:
+        async with self._lock:
+            self._failure_count = 0
+            if self._state in (STATE_HALF_OPEN, STATE_OPEN):
+                self._state = STATE_CLOSED
+                logger.info("Circuit breaker CLOSED")
 
-        Args:
-            name: Registered adapter name.
-            config: Optional initialization configuration.
+    async def record_failure(self) -> None:
+        async with self._lock:
+            self._failure_count += 1
+            self._last_failure_time = datetime.now(timezone.utc)
+            if self._failure_count >= self._max_failures:
+                self._state = STATE_OPEN
+                logger.warning("Circuit breaker OPEN after %d failures", self._failure_count)
 
-        Raises:
-            AdapterNotFoundError: If adapter not in registry.
-        """
-        if name not in self._registry.list_adapters():
-            raise AdapterNotFoundError(name)
+    async def allow_request(self) -> bool:
+        current_state = self.state
+        if current_state == STATE_CLOSED:
+            return True
+        if current_state == STATE_HALF_OPEN:
+            return True
+        return False
 
-        adapter = self._registry.get(name)
-        instance = AdapterInstance(name=name, adapter=adapter)
-        self._instances[name] = instance
-        logger.info("Adapter '%s' created", name)
 
-    async def connect(self, name: str, endpoint: str, credentials_ref: str,
-                      config: Optional[dict] = None) -> None:
-        """Connect adapter to endpoint.
+class AdapterRuntime:
+    """Manages adapter connection lifecycle with retry and circuit breaking."""
 
-        Transition: CREATED -> CONNECTED
+    def __init__(
+        self,
+        max_retries: int = 3,
+        base_retry_delay: float = 1.0,
+        circuit_breaker_max_failures: int = 5,
+        circuit_breaker_reset_timeout: float = 30.0,
+    ):
+        self._max_retries = max_retries
+        self._base_retry_delay = base_retry_delay
+        self._circuit_breaker = CircuitBreaker(
+            max_failures=circuit_breaker_max_failures,
+            reset_timeout=circuit_breaker_reset_timeout,
+        )
 
-        Args:
-            name: Adapter instance name.
-            endpoint: Connection endpoint URL.
-            credentials_ref: Reference to secrets in SecretProvider.
-            config: Additional connection configuration.
-        """
-        instance = self._get_instance(name)
-        if name not in self._lifecycles:
-            self._lifecycles[name] = AdapterLifecycle(name)
-        lifecycle = self._lifecycles[name]
-
-        await lifecycle.connect(instance.adapter, endpoint, credentials_ref, config or {})
-        instance.update_state(lifecycle.state.value)
-        instance.connected_endpoint = endpoint
-        logger.info("Adapter '%s' connected to %s", name, "[ENDPOINT_REDACTED]")
-
-    async def start(self, name: str) -> None:
-        """Start adapter operation.
-
-        Transition: CONNECTED -> RUNNING
-
-        Args:
-            name: Adapter instance name.
-        """
-        instance = self._get_instance(name)
-        lifecycle = self._lifecycles.get(name)
-        if lifecycle is None:
-            lifecycle = AdapterLifecycle(name)
-            self._lifecycles[name] = lifecycle
-
-        await lifecycle.start(instance.adapter)
-        instance.update_state(lifecycle.state.value)
-        logger.info("Adapter '%s' started", name)
-
-    async def stop(self, name: str) -> None:
-        """Stop adapter operation.
-
-        Transition: RUNNING -> STOPPED
-
-        Args:
-            name: Adapter instance name.
-        """
-        instance = self._get_instance(name)
-        lifecycle = self._lifecycles.get(name)
-        if lifecycle is None:
-            lifecycle = AdapterLifecycle(name)
-            self._lifecycles[name] = lifecycle
-
-        await lifecycle.stop(instance.adapter)
-        instance.update_state(lifecycle.state.value)
-        instance.connected_endpoint = None
-        logger.info("Adapter '%s' stopped", name)
-
-    async def disconnect(self, name: str) -> None:
-        """Disconnect adapter.
-
-        Args:
-            name: Adapter instance name.
-        """
-        instance = self._get_instance(name)
-        lifecycle = self._lifecycles.get(name)
-        if lifecycle is None:
-            lifecycle = AdapterLifecycle(name)
-            self._lifecycles[name] = lifecycle
-
-        try:
-            await lifecycle.reset(instance.adapter)
-        except Exception as e:
-            logger.warning("Adapter '%s' disconnect error (best-effort cleanup): %s",
-                          name, e)
-            lifecycle.mark_failed("")
-
-        instance.update_state(lifecycle.state.value)
-        instance.connected_endpoint = None
-        logger.info("Adapter '%s' disconnected", name)
-
-    async def destroy(self, name: str) -> None:
-        """Destroy adapter instance (remove from runtime tracking).
-
-        Args:
-            name: Adapter instance name.
-        """
-        instance = self._get_instance(name)
-
-        if instance.state != "CREATED":
+    async def connect_with_retry(
+        self,
+        adapter: ProtocolAdapter,
+        endpoint: str,
+        credentials_ref: str,
+        config: dict,
+    ) -> None:
+        last_error = None
+        for attempt in range(self._max_retries):
             try:
-                await self.disconnect(name)
-            except Exception:
-                pass  # Best effort cleanup
+                await adapter.connect(endpoint, credentials_ref, config)
+                await self._circuit_breaker.record_success()
+                logger.info("Adapter connected to %s (attempt %d/%d)", endpoint, attempt + 1, self._max_retries)
+                return
+            except Exception as e:
+                last_error = e
+                await self._circuit_breaker.record_failure()
+                if attempt < self._max_retries - 1:
+                    delay = self._base_retry_delay * (2 ** attempt)
+                    logger.warning("Adapter connection attempt %d/%d failed for %s: %s. Retrying in %.1fs...",
+                                   attempt + 1, self._max_retries, endpoint, e, delay)
+                    await asyncio.sleep(delay)
 
-        del self._instances[name]
-        self._health_monitor.clear_cache()
-        logger.info("Adapter '%s' destroyed", name)
+        raise AdapterConnectionError(endpoint, str(last_error))
 
-    async def discover(self, name: str) -> list[DiscoveryResult]:
-        """Discover devices/data points via adapter.
+    async def disconnect_with_cleanup(self, adapter: ProtocolAdapter) -> None:
+        try:
+            await adapter.disconnect()
+            logger.info("Adapter disconnected successfully")
+        except Exception as e:
+            logger.warning("Error during adapter disconnect: %s", e)
 
-        Args:
-            name: Adapter instance name.
+    async def check_health(self, adapter: ProtocolAdapter) -> bool:
+        if not await self._circuit_breaker.allow_request():
+            logger.warning("Circuit breaker OPEN — health check skipped")
+            return False
+        try:
+            healthy = await adapter.health()
+            if healthy:
+                await self._circuit_breaker.record_success()
+            else:
+                await self._circuit_breaker.record_failure()
+            return healthy
+        except Exception as e:
+            await self._circuit_breaker.record_failure()
+            logger.warning("Health check failed: %s", e)
+            return False
 
-        Returns:
-            List of DiscoveryResult.
-        """
-        instance = self._validate_capability(name, AdapterCapability.DISCOVERY)
-        return await instance.adapter.discover()
-
-    async def read(self, name: str, external_ids: list[str]) -> list[NormalizedTelemetry]:
-        """Read telemetry values from adapter.
-
-        Args:
-            name: Adapter instance name.
-            external_ids: List of data point external IDs.
-
-        Returns:
-            List of NormalizedTelemetry.
-        """
-        instance = self._validate_capability(name, AdapterCapability.READ)
-        return await instance.adapter.read(external_ids)
-
-    async def write(self, name: str, external_id: str, value: Any,
-                    data_type: str) -> bool:
-        """Write value to adapter data point.
-
-        Args:
-            name: Adapter instance name.
-            external_id: Target data point external ID.
-            value: Value to write.
-            data_type: Data type string.
-
-        Returns:
-            True if write succeeded.
-        """
-        instance = self._validate_capability(name, AdapterCapability.WRITE)
-        return await instance.adapter.write(external_id, value, data_type)
-
-    async def subscribe(self, name: str, external_id: str,
-                        callback: Any) -> str:
-        """Subscribe to adapter data point.
-
-        Args:
-            name: Adapter instance name.
-            external_id: Data point external ID.
-            callback: Async callback function.
-
-        Returns:
-            Subscription ID.
-        """
-        instance = self._validate_capability(name, AdapterCapability.SUBSCRIBE)
-        return await instance.adapter.subscribe(external_id, callback)
-
-    async def unsubscribe(self, name: str, subscription_id: str) -> None:
-        """Unsubscribe from adapter data point.
-
-        Args:
-            name: Adapter instance name.
-            subscription_id: Subscription ID to cancel.
-        """
-        instance = self._get_instance(name)
-        await instance.adapter.unsubscribe(subscription_id)
-
-    async def health_check(self, name: str) -> dict:
-        """Perform health check on adapter instance.
-
-        Args:
-            name: Adapter instance name.
-
-        Returns:
-            Health report dict.
-        """
-        instance = self._get_instance(name)
-        health = await self._health_monitor.check(name, instance.adapter)
-        instance.record_health(health.status, health.message, health.metadata)
-
-        if health.status == "ERROR":
-            instance.record_error(health.message)
-
-        return health.to_dict()
-
-    def get_status(self, name: str) -> dict:
-        """Get runtime status for adapter instance.
-
-        Args:
-            name: Adapter instance name.
-
-        Returns:
-            Status dict with state, health, etc.
-        """
-        instance = self._get_instance(name)
-        return {
-            "name": name,
-            "state": instance.state,
-            "health_status": instance.health_status,
-            "last_check_time": instance.last_health_check.isoformat() if instance.last_health_check else None,
-            "error_count": instance.error_count,
-            "last_error": instance.last_error,
-        }
-
-    def list_instances(self) -> list[str]:
-        """List all active adapter instance names.
-
-        Returns:
-            List of instance names.
-        """
-        return list(self._instances.keys())
-
-    def _get_instance(self, name: str) -> AdapterInstance:
-        """Get adapter instance or raise error."""
-        instance = self._instances.get(name)
-        if instance is None:
-            raise AdapterNotFoundError(name)
-        return instance
-
-    def _validate_capability(self, name: str, capability: AdapterCapability) -> AdapterInstance:
-        """Validate adapter has required capability.
-
-        Args:
-            name: Adapter instance name.
-            capability: Required capability.
-
-        Returns:
-            AdapterInstance.
-
-        Raises:
-            AdapterCapabilityError: If capability not supported.
-        """
-        instance = self._get_instance(name)
-        supported = instance.adapter.capabilities()
-        if capability not in supported:
-            raise AdapterCapabilityError(name, capability.value)
-        return instance
+    @property
+    def circuit_state(self) -> str:
+        return self._circuit_breaker.state
