@@ -1,0 +1,173 @@
+# DT-Lite Smart Park v1.0 — Monitoring Configuration
+# 负责人：DevOps Team
+# 截止：2026-09-23 17:00
+
+# === Prometheus 配置 ===
+apiVersion: monitoring.coreos.com/v1
+kind: Prometheus
+metadata:
+  name: dt-lite-prometheus
+  namespace: dt-lite-prod
+  labels:
+    app: dt-lite-prometheus
+spec:
+  replicas: 2
+  retention: 30d
+  resources:
+    requests:
+      cpu: 500m
+      memory: 4Gi
+    limits:
+      cpu: "2"
+      memory: 8Gi
+  storage:
+    volumeClaimTemplate:
+      spec:
+        storageClassName: standard
+        resources:
+          requests:
+            storage: 100Gi
+  alerting:
+    alertmanagers:
+    - name: alertmanager
+      namespace: dt-lite-prod
+  scrapeConfigs:
+    - job_name: 'dt-lite-ai'
+      kubernetes_sd_configs:
+      - role: pod
+        namespaces:
+          names:
+          - dt-lite-prod
+      relabel_configs:
+      - source_labels: [__meta_kubernetes_pod_label_app]
+        action: keep
+        regex: dt-lite-ai
+
+---
+# === Grafana 配置 ===
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dt-lite-grafana
+  namespace: dt-lite-prod
+  labels:
+    app: dt-lite-grafana
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: dt-lite-grafana
+  template:
+    metadata:
+      labels:
+        app: dt-lite-grafana
+    spec:
+      containers:
+      - name: grafana
+        image: grafana/grafana:10.0.0
+        ports:
+        - containerPort: 3000
+          name: http
+        volumeMounts:
+        - name: grafana-storage
+          mountPath: /var/lib/grafana
+        - name: grafana-dashboards
+          mountPath: /etc/grafana/provisioning/dashboards
+      volumes:
+      - name: grafana-storage
+        persistentVolumeClaim:
+          claimName: grafana-pvc
+      - name: grafana-dashboards
+        configMap:
+          name: grafana-dashboards
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: dt-lite-grafana
+  namespace: dt-lite-prod
+  labels:
+    app: dt-lite-grafana
+spec:
+  type: ClusterIP
+  selector:
+    app: dt-lite-grafana
+  ports:
+  - name: http
+    port: 3000
+    targetPort: 3000
+
+---
+# === 告警规则配置 ===
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: dt-lite-alerts
+  namespace: dt-lite-prod
+  labels:
+    app: dt-lite-prometheus
+spec:
+  groups:
+  - name: dt-lite.rules
+    rules:
+    - alert: HighErrorRate
+      expr: rate(http_requests_total{status=~"5.."}[5m]) / rate(http_requests_total[5m]) > 0.05
+      for: 5m
+      labels:
+        severity: critical
+      annotations:
+        summary: "High error rate on {{ $labels.instance }}"
+        description: "Error rate is above 5% for 5 minutes"
+    - alert: HighMemoryUsage
+      expr: process_resident_memory_bytes / 1024 / 1024 / 1024 > 1.5
+      for: 10m
+      labels:
+        severity: warning
+      annotations:
+        summary: "High memory usage on {{ $labels.instance }}"
+        description: "Memory usage is above 1.5GB for 10 minutes"
+    - alert: PodNotReady
+      expr: kube_pod_status_ready{condition="true"} == 0
+      for: 5m
+      labels:
+        severity: critical
+      annotations:
+        summary: "Pod {{ $labels.pod }} is not ready"
+        description: "Pod has been not ready for 5 minutes"
+    - alert: HighCPUUsage
+      expr: rate(process_cpu_seconds_total[5m]) > 0.8
+      for: 10m
+      labels:
+        severity: warning
+      annotations:
+        summary: "High CPU usage on {{ $labels.instance }}"
+        description: "CPU usage is above 80% for 10 minutes"
+    - alert: DiskSpaceLow
+      expr: (node_filesystem_avail_bytes / node_filesystem_size_bytes) < 0.1
+      for: 5m
+      labels:
+        severity: critical
+      annotations:
+        summary: "Disk space is low on {{ $labels.instance }}"
+        description: "Less than 10% disk space remaining"
+
+---
+# === Grafana Dashboard ConfigMap ===
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboards
+  namespace: dt-lite-prod
+data:
+  dashboards.yaml: |
+    apiVersion: 1
+    providers:
+    - name: default
+      orgId: 1
+      folder: ''
+      type: file
+      disableDeletion: false
+      editable: true
+      options:
+        path: /etc/grafana/provisioning/dashboards
+        foldersFromFilesStructure: false
