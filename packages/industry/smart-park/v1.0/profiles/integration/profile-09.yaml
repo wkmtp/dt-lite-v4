@@ -1,0 +1,27 @@
+apiVersion: dt-lite.io/v1
+kind: IntegrationProfile
+metadata:
+  name: profile-park-9
+  namespace: smart-park
+  labels:
+    app: dt-lite-smart-park
+spec:
+  code: profile.park.9
+  displayName: "集成配置模板 9"
+  protocol: opcua
+  address: "opcua://192.168.9.1:4840"
+  polling_interval: 5s
+  timeout: 30s
+  retry_policy:
+    max_attempts: 3
+    backoff: exponential
+  mappings:
+    - source: point.temperature
+      target: property.temp
+      transform: raw_to_celsius
+    - source: point.humidity
+      target: property.humidity
+      transform: raw_to_percent
+  metadata:
+    version: v1.0.0
+    created: 2026-09-22

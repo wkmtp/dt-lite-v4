@@ -1,0 +1,26 @@
+apiVersion: dt-lite.io/v1
+kind: MappingProfile
+metadata:
+  name: mapping-park-50
+  namespace: smart-park
+  labels:
+    app: dt-lite-smart-park
+spec:
+  code: mapping.park.temp.50
+  displayName: "Temp 映射 50"
+  source:
+    system: bms
+    point: "temp_50"
+    protocol: modbus
+    address: "192.168.1.50"
+    register: 40050
+  target:
+    asset: asset.park.building.01
+    property: "temp_value"
+  transform:
+    type: raw_to_physical
+    scale: 0.1
+    offset: 0
+  metadata:
+    version: v1.0.0
+    created: 2026-09-22

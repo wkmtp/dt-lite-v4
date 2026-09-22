@@ -1,0 +1,43 @@
+apiVersion: dt-lite.io/v1
+kind: AssetTemplate
+metadata:
+  name: asset-park-lighting-26
+  namespace: smart-park
+  labels:
+    app: dt-lite-smart-park
+    category: lighting
+spec:
+  code: asset.park.lighting.26
+  displayName: "Lighting 资产 26"
+  description: "智慧园区 lighting 资产模板 26"
+  category: lighting
+  tags:
+    - smart-park
+    - lighting
+    - asset
+  properties:
+    - name: status
+      type: string
+      enum: [online, offline, maintenance]
+      required: true
+    - name: temperature
+      type: float
+      required: false
+    - name: power_kw
+      type: float
+      required: false
+  relationships:
+    - type: located_in
+      target: spatial_zone
+      cardinality: one-to-many
+  capabilities:
+    - code: read_status
+      name: 读取状态
+      safety_level: C0
+    - code: read_telemetry
+      name: 读取遥测
+      safety_level: C0
+  metadata:
+    version: v1.0.0
+    created: 2026-09-22
+    creator: industry-lead

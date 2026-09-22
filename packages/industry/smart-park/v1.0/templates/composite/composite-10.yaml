@@ -1,0 +1,30 @@
+apiVersion: dt-lite.io/v1
+kind: CompositeAssetTemplate
+metadata:
+  name: composite-park-10
+  namespace: smart-park
+  labels:
+    app: dt-lite-smart-park
+spec:
+  code: composite.park.10
+  displayName: "组合资产模板 10"
+  description: "智慧园区组合资产模板 10"
+  composition:
+    type: tree
+    max_depth: 10
+    max_edges: 1000
+  children:
+    - template: asset.park.building.01
+      role: parent
+    - template: asset.park.hvac.01
+      role: child
+  aggregation:
+    - func: sum
+      field: energy_consumption
+    - func: avg
+      field: temperature
+    - func: count
+      field: status
+  metadata:
+    version: v1.0.0
+    created: 2026-09-22

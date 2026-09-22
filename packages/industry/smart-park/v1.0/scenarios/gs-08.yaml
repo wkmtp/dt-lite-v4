@@ -1,0 +1,56 @@
+apiVersion: dt-lite.io/v1
+kind: ScenarioTemplate
+metadata:
+  name: gs-park-8
+  namespace: smart-park
+  labels:
+    app: dt-lite-smart-park
+    scenario: golden
+spec:
+  code: gs.park.08
+  displayName: "黄金场景 8"
+  description: "智慧园区黄金场景模板 8 - 零代码端到端验证"
+  category: operational
+  priority: high
+  steps:
+    - id: step-1
+      name: "初始化资产"
+      type: asset_creation
+      timeout: 30s
+    - id: step-2
+      name: "配置映射"
+      type: mapping_configuration
+      timeout: 60s
+    - id: step-3
+      name: "数据接入"
+      type: data_ingestion
+      timeout: 120s
+    - id: step-4
+      name: "验证指标"
+      type: kpi_validation
+      timeout: 30s
+  assets:
+    - template: asset.park.building.01
+      role: primary
+    - template: asset.park.hvac.01
+      role: secondary
+  kpis:
+    - code: response_time
+      target: "< 200ms"
+    - code: data_accuracy
+      target: "= 100%"
+    - code: availability
+      target: "> 99.9%"
+  validation:
+    criteria:
+      - name: "数据完整性"
+        check: "point_count == expected_count"
+      - name: "响应时间"
+        check: "p95_latency < 200ms"
+      - name: "错误率"
+        check: "error_rate < 0.001"
+  metadata:
+    version: v1.0.0
+    created: 2026-09-22
+    creator: industry-lead
+    test_type: golden_scenario

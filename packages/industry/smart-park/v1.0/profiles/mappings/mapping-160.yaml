@@ -1,0 +1,26 @@
+apiVersion: dt-lite.io/v1
+kind: MappingProfile
+metadata:
+  name: mapping-park-160
+  namespace: smart-park
+  labels:
+    app: dt-lite-smart-park
+spec:
+  code: mapping.park.temp.160
+  displayName: "Temp 映射 160"
+  source:
+    system: bms
+    point: "temp_160"
+    protocol: modbus
+    address: "192.168.1.160"
+    register: 40160
+  target:
+    asset: asset.park.building.01
+    property: "temp_value"
+  transform:
+    type: raw_to_physical
+    scale: 0.1
+    offset: 0
+  metadata:
+    version: v1.0.0
+    created: 2026-09-22

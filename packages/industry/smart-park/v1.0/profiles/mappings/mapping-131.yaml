@@ -1,0 +1,26 @@
+apiVersion: dt-lite.io/v1
+kind: MappingProfile
+metadata:
+  name: mapping-park-131
+  namespace: smart-park
+  labels:
+    app: dt-lite-smart-park
+spec:
+  code: mapping.park.temp.131
+  displayName: "Temp 映射 131"
+  source:
+    system: bms
+    point: "temp_131"
+    protocol: modbus
+    address: "192.168.1.131"
+    register: 40131
+  target:
+    asset: asset.park.building.01
+    property: "temp_value"
+  transform:
+    type: raw_to_physical
+    scale: 0.1
+    offset: 0
+  metadata:
+    version: v1.0.0
+    created: 2026-09-22

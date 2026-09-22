@@ -1,0 +1,11 @@
+{
+  "added_fields": [],
+  "removed_fields": [],
+  "modified_schemas": [],
+  "semantic_diff": {
+    "added": [],
+    "removed": [],
+    "modified": []
+  },
+  "is_frozen": true
+}

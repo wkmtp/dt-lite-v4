@@ -1,0 +1,26 @@
+apiVersion: dt-lite.io/v1
+kind: MappingProfile
+metadata:
+  name: mapping-park-106
+  namespace: smart-park
+  labels:
+    app: dt-lite-smart-park
+spec:
+  code: mapping.park.humidity.106
+  displayName: "Humidity 映射 106"
+  source:
+    system: bms
+    point: "humidity_106"
+    protocol: modbus
+    address: "192.168.1.106"
+    register: 40106
+  target:
+    asset: asset.park.building.01
+    property: "humidity_value"
+  transform:
+    type: raw_to_physical
+    scale: 0.1
+    offset: 0
+  metadata:
+    version: v1.0.0
+    created: 2026-09-22

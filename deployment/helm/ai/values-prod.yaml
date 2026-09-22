@@ -1,0 +1,74 @@
+# DT-Lite AI Service — Values for Helm Chart
+replicaCount: 1
+
+image:
+  repository: busybox
+  tag: "1.36"
+  pullPolicy: IfNotPresent
+
+service:
+  type: ClusterIP
+  port: 80
+  targetPort: 80
+  metricsPort: 9090
+
+ingress:
+  enabled: false
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 64Mi
+  limits:
+    cpu: 100m
+    memory: 128Mi
+
+autoscaling:
+  enabled: false
+
+postgresql:
+  enabled: true
+  auth:
+    postgresPassword: "dtlite-ai-pass"
+  primary:
+    persistence:
+      size: 10Gi
+
+redis:
+  enabled: true
+  auth:
+    password: "dtlite-redis-pass"
+
+prometheus:
+  enabled: true
+  prometheus:
+    enabled: true
+  alertmanager:
+    enabled: false
+
+# AI Service Configuration
+ai:
+  openai:
+    apiKey: ""
+    model: "gpt-4o"
+  anthropic:
+    apiKey: ""
+    model: "claude-3-5-sonnet-20241022"
+  ollama:
+    baseUrl: "http://ollama:11434"
+    model: "llama3.1"
+  embedding:
+    model: "text-embedding-3-large"
+    dimension: 3072
+  rag:
+    topK: 10
+    rerankTopK: 5
+    chunkSize: 512
+  agent:
+    maxIterations: 10
+    memoryWindowTokens: 32000
+  quota:
+    defaultRPM: 60
+    defaultTPM: 100000
+    dailyBudgetUSD: 10.0
+    monthlyBudgetUSD: 200.0
