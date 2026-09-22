@@ -20,6 +20,10 @@ spec:
       labels:
         app: dt-lite-ai
         release: {{ .Release.Name }}
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9090"
+        prometheus.io/path: "/metrics"
     spec:
       containers:
         - name: ai
@@ -29,8 +33,20 @@ spec:
             - name: http
               containerPort: 80
               protocol: TCP
+            - name: metrics
+              containerPort: 9090
+              protocol: TCP
+          # 简单健康检查命令（不依赖外部服务）
           command: ["/bin/sh", "-c"]
-          args: ["while true; do echo 'HTTP/1.1 200 OK' && echo 'Content-Type: application/json' && echo '' && echo '{\"status\":\"healthy\"}' && sleep 10; done"]
+          args:
+            - |
+              while true; do
+                echo "HTTP/1.1 200 OK"
+                echo "Content-Type: application/json"
+                echo ""
+                echo '{"status":"healthy","timestamp":"$(date -u +%Y-%m-%dT%H:%M:%SZ)"}'
+                sleep 10
+              done
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
 ---
@@ -42,6 +58,9 @@ metadata:
   labels:
     app: dt-lite-ai
     release: {{ .Release.Name }}
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "9090"
 spec:
   type: {{ .Values.service.type }}
   selector:
@@ -52,3 +71,27 @@ spec:
       port: {{ .Values.service.port }}
       targetPort: 80
       protocol: TCP
+    - name: metrics
+      port: 9090
+      targetPort: 9090
+      protocol: TCP
+---
+{{- if .Values.prometheus.enabled }}
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: {{ .Release.Name }}-ai
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: dt-lite-ai
+    release: {{ .Release.Name }}
+spec:
+  selector:
+    matchLabels:
+      app: dt-lite-ai
+      release: {{ .Release.Name }}
+  endpoints:
+    - port: metrics
+      interval: {{ .Values.prometheus.scrapeInterval }}
+      path: {{ .Values.prometheus.scrapePath }}
+{{- end }}
